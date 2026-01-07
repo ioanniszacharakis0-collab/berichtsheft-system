@@ -18,6 +18,7 @@ const BerichtsheftSystem = () => {
     stunden: '',
     details: ''
   });
+  const [bearbeitenModus, setBearbeitenModus] = useState(null); // Für Bearbeitung abgelehnter Berichte
 
   useEffect(() => {
     if (currentUser) {
@@ -110,25 +111,43 @@ const BerichtsheftSystem = () => {
 
     setLoading(true);
     try {
-      const neueBerichte = await supabaseCall('berichte', {
-        method: 'POST',
-        body: JSON.stringify({
-          user_id: currentUser.id,
-          azubi_name: currentUser.name,
-          datum_von: neuerBericht.datumVon,
-          datum_bis: neuerBericht.datumBis,
-          taetigkeit: neuerBericht.taetigkeit,
-          stunden: parseFloat(neuerBericht.stunden),
-          details: neuerBericht.details,
-          status: 'ausstehend'
-        })
-      });
-
-      if (neueBerichte) {
-        await loadBerichte();
-        setNeuerBericht({ datumVon: '', datumBis: '', taetigkeit: '', stunden: '', details: '' });
+      if (bearbeitenModus) {
+        // Abgelehnten Bericht aktualisieren
+        await supabaseCall(`berichte?id=eq.${bearbeitenModus}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            datum_von: neuerBericht.datumVon,
+            datum_bis: neuerBericht.datumBis,
+            taetigkeit: neuerBericht.taetigkeit,
+            stunden: parseFloat(neuerBericht.stunden),
+            details: neuerBericht.details,
+            status: 'ausstehend',
+            kommentar: '',
+            bearbeitet_am: null
+          })
+        });
+        alert('Bericht erfolgreich überarbeitet und neu eingereicht!');
+        setBearbeitenModus(null);
+      } else {
+        // Neuen Bericht erstellen
+        await supabaseCall('berichte', {
+          method: 'POST',
+          body: JSON.stringify({
+            user_id: currentUser.id,
+            azubi_name: currentUser.name,
+            datum_von: neuerBericht.datumVon,
+            datum_bis: neuerBericht.datumBis,
+            taetigkeit: neuerBericht.taetigkeit,
+            stunden: parseFloat(neuerBericht.stunden),
+            details: neuerBericht.details,
+            status: 'ausstehend'
+          })
+        });
         alert('Bericht erfolgreich eingereicht!');
       }
+
+      await loadBerichte();
+      setNeuerBericht({ datumVon: '', datumBis: '', taetigkeit: '', stunden: '', details: '' });
     } catch (err) {
       setError('Fehler beim Einreichen: ' + err.message);
     } finally {
@@ -136,7 +155,24 @@ const BerichtsheftSystem = () => {
     }
   };
 
-  const berichtBearbeiten = async (berichtId, status, kommentar = '') => {
+  const berichtBearbeiten = (bericht) => {
+    setBearbeitenModus(bericht.id);
+    setNeuerBericht({
+      datumVon: bericht.datum_von,
+      datumBis: bericht.datum_bis,
+      taetigkeit: bericht.taetigkeit,
+      stunden: bericht.stunden.toString(),
+      details: bericht.details || ''
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const bearbeitungAbbrechen = () => {
+    setBearbeitenModus(null);
+    setNeuerBericht({ datumVon: '', datumBis: '', taetigkeit: '', stunden: '', details: '' });
+  };
+
+  const berichtBearbeitenAusbilder = async (berichtId, status, kommentar = '') => {
     setLoading(true);
     try {
       await supabaseCall(`berichte?id=eq.${berichtId}`, {
@@ -342,7 +378,7 @@ const BerichtsheftSystem = () => {
 
     htmlContent += `
         <div class="footer">
-          <p>Digitales Berichtsheft-System | Erstellt mit Supabase & Netlify</p>
+          <p>Digitales Berichtsheft-System | TFG Transfracht</p>
         </div>
       </body>
       </html>
@@ -359,7 +395,8 @@ const BerichtsheftSystem = () => {
           <div className="text-center mb-8">
             <FileText className="mx-auto text-indigo-600 mb-4" size={48} />
             <h1 className="text-3xl font-bold text-gray-800">Digitales Berichtsheft</h1>
-            <p className="text-gray-600 mt-2">Mit Supabase Backend</p>
+            <p className="text-gray-600 mt-2">TFG Transfracht</p>
+            <p className="text-sm text-gray-500">Mit Supabase Backend</p>
           </div>
 
           {error && (
@@ -426,10 +463,11 @@ const BerichtsheftSystem = () => {
         <header className="bg-indigo-600 text-white p-4 shadow-lg">
           <div className="max-w-6xl mx-auto flex justify-between items-center">
             <div className="flex items-center gap-3">
-              <FileText size={28} />
+              <FileText className="mx-auto text-indigo-600 mb-4" size={28} />
               <div>
                 <h1 className="text-xl font-bold">Digitales Berichtsheft</h1>
-                <p className="text-sm text-indigo-100">Willkommen, {currentUser.name}</p>
+                <p className="text-sm text-indigo-100">TFG Transfracht</p>
+                <p className="text-xs text-indigo-200">Willkommen, {currentUser.name}</p>
               </div>
             </div>
             <button
@@ -456,8 +494,15 @@ const BerichtsheftSystem = () => {
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <Upload size={24} className="text-indigo-600" />
-                Neuen Bericht einreichen
+                {bearbeitenModus ? 'Bericht überarbeiten' : 'Neuen Bericht einreichen'}
               </h2>
+              {bearbeitenModus && (
+                <div className="mb-4 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Hinweis:</strong> Du bearbeitest einen abgelehnten Bericht. Nach dem Speichern wird er erneut zur Prüfung eingereicht.
+                  </p>
+                </div>
+              )}
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -533,23 +578,23 @@ const BerichtsheftSystem = () => {
                   disabled={loading}
                   className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {loading ? 'Wird eingereicht...' : 'Bericht einreichen'}
+                  {loading ? 'Wird eingereicht...' : bearbeitenModus ? 'Bericht überarbeiten & neu einreichen' : 'Bericht einreichen'}
                 </button>
+                {bearbeitenModus && (
+                  <button
+                    onClick={bearbeitungAbbrechen}
+                    disabled={loading}
+                    className="w-full mt-2 bg-gray-500 text-white py-3 rounded-lg hover:bg-gray-600 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Abbrechen
+                  </button>
+                )}
               </div>
             </div>
 
             <div className="bg-white rounded-lg shadow-md p-6">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold text-gray-800">Meine Berichte</h2>
-                {berichte.length > 0 && (
-                  <button
-                    onClick={downloadPDF}
-                    className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition text-sm font-medium"
-                  >
-                    <Download size={18} />
-                    Als PDF
-                  </button>
-                )}
               </div>
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {loading ? (
@@ -560,11 +605,11 @@ const BerichtsheftSystem = () => {
                   berichte.map((bericht) => (
                     <div key={bericht.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
                       <div className="flex justify-between items-start mb-2">
-                        <div>
+                        <div className="flex-1">
                           <p className="font-semibold text-gray-800">{bericht.taetigkeit}</p>
                           <p className="text-sm text-gray-600">{bericht.datum_von} bis {bericht.datum_bis} • {bericht.stunden}h</p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 ml-3">
                           {getStatusIcon(bericht.status)}
                           <span className="text-sm font-medium">{getStatusText(bericht.status)}</span>
                         </div>
@@ -576,8 +621,25 @@ const BerichtsheftSystem = () => {
                         <div className="mt-3 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded">
                           <p className="text-sm font-medium text-gray-700">Kommentar vom Ausbilder:</p>
                           <p className="text-sm text-gray-600 mt-1">{bericht.kommentar}</p>
+                          {bericht.status === 'abgelehnt' && (
+                            <button
+                              onClick={() => berichtBearbeiten(bericht)}
+                              className="mt-3 w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition text-sm font-medium"
+                            >
+                              Bericht überarbeiten
+                            </button>
+                          )}
                         </div>
                       )}
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <button
+                          onClick={() => downloadPDF(bericht)}
+                          className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition text-sm font-medium"
+                        >
+                          <Download size={16} />
+                          Als PDF herunterladen
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -685,7 +747,7 @@ const BerichtsheftSystem = () => {
                                 <button
                                   onClick={() => {
                                     const kommentar = prompt('Optional: Kommentar zur Freigabe hinzufügen');
-                                    berichtBearbeiten(bericht.id, 'freigegeben', kommentar || '');
+                                    berichtBearbeitenAusbilder(bericht.id, 'freigegeben', kommentar || '');
                                   }}
                                   disabled={loading}
                                   className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition font-medium flex items-center justify-center gap-2 disabled:opacity-50"
@@ -697,7 +759,7 @@ const BerichtsheftSystem = () => {
                                   onClick={() => {
                                     const kommentar = prompt('Bitte gib einen Grund für die Ablehnung an:');
                                     if (kommentar) {
-                                      berichtBearbeiten(bericht.id, 'abgelehnt', kommentar);
+                                      berichtBearbeitenAusbilder(bericht.id, 'abgelehnt', kommentar);
                                     }
                                   }}
                                   disabled={loading}
@@ -734,4 +796,3 @@ const BerichtsheftSystem = () => {
 };
 
 export default BerichtsheftSystem;
-
