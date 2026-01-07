@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { FileText, CheckCircle, XCircle, Clock, Upload, LogOut, User, Download, AlertCircle } from 'lucide-react';
 
 // ⚠️ WICHTIG: Ersetze diese Werte mit deinen Supabase Credentials!
-const SUPABASE_URL = 'DEINE_SUPABASE_URL_HIER';  // z.B. https://xyz.supabase.co
-const SUPABASE_KEY = 'DEIN_SUPABASE_ANON_KEY_HIER';  // Dein anon/public key
+const SUPABASE_URL = 'https://lgdrcttylguqrhvvedvx.supabase.co';  // z.B. https://xyz.supabase.co
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxnZHJjdHR5bGd1cXJodnZlZHZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3NzM3OTgsImV4cCI6MjA4MzM0OTc5OH0.xwmLr5wbIf4aLwP8UOmVxfc56NUIk6qAU6rMEIbdnYg';  // Dein anon/public key
 
 const BerichtsheftSystem = () => {
   const [currentUser, setCurrentUser] = useState(null);
@@ -734,3 +734,4 @@ const BerichtsheftSystem = () => {
 };
 
 export default BerichtsheftSystem;
+
