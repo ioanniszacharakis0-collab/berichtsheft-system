@@ -609,22 +609,22 @@ const BerichtsheftSystem = () => {
                   berichte.map((bericht) => (
                     <div key={bericht.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
                       <div className="flex justify-between items-start mb-2">
-                        <div className="flex-1">
-                          <p className="font-semibold text-gray-800">{bericht.taetigkeit}</p>
-                          <p className="text-sm text-gray-600">{bericht.datum_von} bis {bericht.datum_bis} • {bericht.stunden}h</p>
+                        <div className="flex-1 min-w-0 pr-3">
+                          <p className="font-semibold text-gray-800 break-words">{bericht.taetigkeit}</p>
+                          <p className="text-sm text-gray-600 break-words">{bericht.datum_von} bis {bericht.datum_bis} • {bericht.stunden}h</p>
                         </div>
-                        <div className="flex items-center gap-2 ml-3">
+                        <div className="flex items-center gap-2 ml-3 flex-shrink-0">
                           {getStatusIcon(bericht.status)}
                           <span className="text-sm font-medium">{getStatusText(bericht.status)}</span>
                         </div>
                       </div>
                       {bericht.details && (
-                        <p className="text-sm text-gray-600 mt-2 break-words whitespace-pre-wrap overflow-hidden">{bericht.details}</p>
+                        <p className="text-sm text-gray-600 mt-2 break-words whitespace-pre-wrap overflow-hidden" style={{wordBreak: 'break-word', overflowWrap: 'anywhere'}}>{bericht.details}</p>
                       )}
                       {bericht.kommentar && (
-                        <div className="mt-3 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+                        <div className="mt-3 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded overflow-hidden">
                           <p className="text-sm font-medium text-gray-700">Kommentar vom Ausbilder:</p>
-                          <p className="text-sm text-gray-600 mt-1 break-words whitespace-pre-wrap overflow-hidden">{bericht.kommentar}</p>
+                          <p className="text-sm text-gray-600 mt-1 break-words whitespace-pre-wrap" style={{wordBreak: 'break-word', overflowWrap: 'anywhere'}}>{bericht.kommentar}</p>
                           {bericht.status === 'abgelehnt' && (
                             <button
                               onClick={() => berichtBearbeiten(bericht)}
