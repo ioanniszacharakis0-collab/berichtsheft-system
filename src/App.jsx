@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, CheckCircle, XCircle, Clock, Upload, LogOut, User, Download, AlertCircle } from 'lucide-react';
+import { FileText, CheckCircle, XCircle, Clock, Upload, LogOut, User, Download, AlertCircle, Calendar, Filter } from 'lucide-react';
 
 const SUPABASE_URL = 'https://lgdrcttylguqrhvvedvx.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxnZHJjdHR5bGd1cXJodnZlZHZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3NzM3OTgsImV4cCI6MjA4MzM0OTc5OH0.xwmLr5wbIf4aLwP8UOmVxfc56NUIk6qAU6rMEIbdnYg';
@@ -7,15 +7,15 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const App = () => {
   const [user, setUser] = useState(null);
   const [berichte, setBerichte] = useState([]);
+  const [filteredBerichte, setFilteredBerichte] = useState([]);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
-  const [selectedFile, setSelectedFile] = useState(null);
   const [selectedAzubi, setSelectedAzubi] = useState(null);
   const [azubis, setAzubis] = useState([]);
-  const [showPdfPreview, setShowPdfPreview] = useState(false);
-  const [pdfUrl, setPdfUrl] = useState('');
   const [kommentar, setKommentar] = useState('');
+  const [berichtDatum, setBerichtDatum] = useState(new Date().toISOString().split('T')[0]);
+  const [zeitraumFilter, setZeitraumFilter] = useState('alle');
 
   const supabaseRequest = async (endpoint, options = {}) => {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, {
@@ -83,50 +83,90 @@ const App = () => {
       
       const data = await supabaseRequest(query);
       setBerichte(data || []);
+      setFilteredBerichte(data || []);
     } catch (error) {
       console.error('Fehler beim Laden der Berichte:', error);
     }
   };
 
+  // Zeitraum Filter anwenden
+  const filterBerichteByZeitraum = (zeitraum) => {
+    setZeitraumFilter(zeitraum);
+    
+    if (zeitraum === 'alle') {
+      setFilteredBerichte(berichte);
+      return;
+    }
+
+    const heute = new Date();
+    let startDatum = new Date();
+
+    switch(zeitraum) {
+      case 'heute':
+        startDatum = new Date(heute.setHours(0, 0, 0, 0));
+        break;
+      case 'diese-woche':
+        startDatum = new Date(heute);
+        startDatum.setDate(heute.getDate() - heute.getDay() + 1); // Montag
+        break;
+      case 'dieser-monat':
+        startDatum = new Date(heute.getFullYear(), heute.getMonth(), 1);
+        break;
+      case 'letzter-monat':
+        startDatum = new Date(heute.getFullYear(), heute.getMonth() - 1, 1);
+        const endDatum = new Date(heute.getFullYear(), heute.getMonth(), 0);
+        const filtered = berichte.filter(b => {
+          const berichtDatum = new Date(b.datum);
+          return berichtDatum >= startDatum && berichtDatum <= endDatum;
+        });
+        setFilteredBerichte(filtered);
+        return;
+      case 'dieses-jahr':
+        startDatum = new Date(heute.getFullYear(), 0, 1);
+        break;
+      default:
+        setFilteredBerichte(berichte);
+        return;
+    }
+
+    const filtered = berichte.filter(b => {
+      const berichtDatum = new Date(b.datum);
+      return berichtDatum >= startDatum;
+    });
+    
+    setFilteredBerichte(filtered);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!selectedFile) {
-      alert('Bitte wähle eine PDF-Datei aus');
+    const berichtText = document.getElementById('bericht-text').value;
+    
+    if (!berichtText.trim()) {
+      alert('Bitte gib einen Berichtstext ein');
       return;
     }
 
     try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = reader.result.split(',')[1];
-        
-        const berichtText = document.getElementById('bericht-text').value;
-        
-        const neuerBericht = {
-          azubi_id: user.id,
-          azubi_name: user.name,
-          datum: new Date().toISOString().split('T')[0],
-          details: berichtText,
-          pdf_data: base64,
-          status: 'pending',
-          kommentar: null,
-          ueberarbeitet: false
-        };
-
-        await supabaseRequest('berichte', {
-          method: 'POST',
-          body: JSON.stringify(neuerBericht),
-        });
-
-        setSelectedFile(null);
-        document.getElementById('bericht-text').value = '';
-        document.getElementById('file-input').value = '';
-        loadBerichte(user);
-        alert('Bericht erfolgreich eingereicht!');
+      const neuerBericht = {
+        azubi_id: user.id,
+        azubi_name: user.name,
+        datum: berichtDatum,
+        details: berichtText,
+        status: 'pending',
+        kommentar: null,
+        ueberarbeitet: false
       };
-      
-      reader.readAsDataURL(selectedFile);
+
+      await supabaseRequest('berichte', {
+        method: 'POST',
+        body: JSON.stringify(neuerBericht),
+      });
+
+      document.getElementById('bericht-text').value = '';
+      setBerichtDatum(new Date().toISOString().split('T')[0]);
+      loadBerichte(user);
+      alert('Bericht erfolgreich eingereicht!');
     } catch (error) {
       console.error('Fehler beim Einreichen:', error);
       alert('Fehler beim Einreichen des Berichts');
@@ -186,30 +226,80 @@ const App = () => {
     }
   };
 
-  const handleViewPdf = (pdfData) => {
-    const blob = base64ToBlob(pdfData, 'application/pdf');
-    const url = URL.createObjectURL(blob);
-    setPdfUrl(url);
-    setShowPdfPreview(true);
-  };
-
-  const handleDownloadPdf = (pdfData, berichtId) => {
-    const blob = base64ToBlob(pdfData, 'application/pdf');
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `bericht_${berichtId}.pdf`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const base64ToBlob = (base64, type) => {
-    const byteCharacters = atob(base64);
-    const byteArrays = [];
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteArrays.push(byteCharacters.charCodeAt(i));
+  const generatePdf = (bericht) => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 595;
+      canvas.height = 842;
+      const ctx = canvas.getContext('2d');
+      
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.fillStyle = 'black';
+      
+      ctx.font = 'bold 20px Arial';
+      ctx.fillText('AUSBILDUNGSNACHWEIS', 50, 60);
+      
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(50, 75);
+      ctx.lineTo(545, 75);
+      ctx.stroke();
+      
+      ctx.font = '14px Arial';
+      ctx.fillText(`Azubi: ${bericht.azubi_name}`, 50, 110);
+      ctx.fillText(`Datum: ${new Date(bericht.datum).toLocaleDateString('de-DE')}`, 50, 135);
+      ctx.fillText('Status: Freigegeben', 50, 160);
+      
+      ctx.font = 'bold 14px Arial';
+      ctx.fillText('BERICHT:', 50, 200);
+      
+      ctx.font = '12px Arial';
+      const maxWidth = 495;
+      const lineHeight = 18;
+      let y = 230;
+      
+      const words = bericht.details.split(' ');
+      let line = '';
+      
+      for (let i = 0; i < words.length; i++) {
+        const testLine = line + words[i] + ' ';
+        const metrics = ctx.measureText(testLine);
+        
+        if (metrics.width > maxWidth && i > 0) {
+          ctx.fillText(line, 50, y);
+          line = words[i] + ' ';
+          y += lineHeight;
+          
+          if (y > 750) {
+            break;
+          }
+        } else {
+          line = testLine;
+        }
+      }
+      ctx.fillText(line, 50, y);
+      
+      ctx.font = '10px Arial';
+      ctx.fillStyle = '#666666';
+      ctx.fillText(`Erstellt am ${new Date().toLocaleDateString('de-DE')}`, 50, 800);
+      
+      canvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Bericht_${bericht.azubi_name}_${bericht.datum}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+      
+      alert('Bericht wird heruntergeladen...');
+    } catch (error) {
+      console.error('Fehler beim Generieren:', error);
+      alert('Fehler beim Erstellen des Berichts');
     }
-    return new Blob([new Uint8Array(byteArrays)], { type });
   };
 
   const getStatusColor = (status) => {
@@ -235,34 +325,6 @@ const App = () => {
       default: return 'Ausstehend';
     }
   };
-
-  if (showPdfPreview) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-lg w-full max-w-4xl h-[90vh] flex flex-col">
-          <div className="p-4 border-b flex justify-between items-center">
-            <h2 className="text-lg font-bold">PDF Vorschau</h2>
-            <button
-              onClick={() => {
-                setShowPdfPreview(false);
-                URL.revokeObjectURL(pdfUrl);
-              }}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="flex-1 overflow-auto">
-            <iframe
-              src={pdfUrl}
-              className="w-full h-full"
-              title="PDF Preview"
-            />
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (!user) {
     return (
@@ -349,29 +411,30 @@ const App = () => {
               </h2>
               
               <form onSubmit={handleSubmit} className="space-y-4">
+                {/* DATUMSWAHL FÜR AZUBI */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Datum des Berichts
+                  </label>
+                  <input
+                    type="date"
+                    value={berichtDatum}
+                    onChange={(e) => setBerichtDatum(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Berichtstext
                   </label>
                   <textarea
                     id="bericht-text"
-                    rows="4"
+                    rows="8"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Was hast du diese Woche gelernt?"
-                    required
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    PDF hochladen
-                  </label>
-                  <input
-                    id="file-input"
-                    type="file"
-                    accept=".pdf"
-                    onChange={(e) => setSelectedFile(e.target.files[0])}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Was hast du an diesem Tag gelernt? Beschreibe deine Tätigkeiten..."
                     required
                   />
                 </div>
@@ -452,20 +515,17 @@ const App = () => {
                         </div>
                       )}
                       
-                      <div className="flex gap-2 mt-3">
-                        <button
-                          onClick={() => handleViewPdf(bericht.pdf_data)}
-                          className="flex-1 bg-gray-100 text-gray-700 py-2 px-3 rounded hover:bg-gray-200 transition-colors text-sm font-medium"
-                        >
-                          PDF ansehen
-                        </button>
-                        <button
-                          onClick={() => handleDownloadPdf(bericht.pdf_data, bericht.id)}
-                          className="bg-gray-100 text-gray-700 py-2 px-3 rounded hover:bg-gray-200 transition-colors"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {bericht.status === 'approved' && (
+                        <div className="mt-3">
+                          <button
+                            onClick={() => generatePdf(bericht)}
+                            className="w-full bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition-colors text-sm font-medium flex items-center justify-center"
+                          >
+                            <Download className="w-4 h-4 mr-2" />
+                            Bericht herunterladen
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
@@ -542,6 +602,8 @@ const App = () => {
                 onClick={() => {
                   setSelectedAzubi(null);
                   setBerichte([]);
+                  setFilteredBerichte([]);
+                  setZeitraumFilter('alle');
                 }}
                 className="mr-4 text-blue-600 hover:text-blue-800"
               >
@@ -564,13 +626,90 @@ const App = () => {
         </div>
 
         <div className="max-w-4xl mx-auto px-4 py-8">
+          {/* ZEITRAUM FILTER */}
+          <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+            <div className="flex items-center mb-3">
+              <Filter className="w-5 h-5 text-blue-600 mr-2" />
+              <h3 className="font-medium text-gray-800">Zeitraum filtern:</h3>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => filterBerichteByZeitraum('alle')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  zeitraumFilter === 'alle' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Alle
+              </button>
+              <button
+                onClick={() => filterBerichteByZeitraum('heute')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  zeitraumFilter === 'heute' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Heute
+              </button>
+              <button
+                onClick={() => filterBerichteByZeitraum('diese-woche')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  zeitraumFilter === 'diese-woche' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Diese Woche
+              </button>
+              <button
+                onClick={() => filterBerichteByZeitraum('dieser-monat')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  zeitraumFilter === 'dieser-monat' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Dieser Monat
+              </button>
+              <button
+                onClick={() => filterBerichteByZeitraum('letzter-monat')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  zeitraumFilter === 'letzter-monat' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Letzter Monat
+              </button>
+              <button
+                onClick={() => filterBerichteByZeitraum('dieses-jahr')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  zeitraumFilter === 'dieses-jahr' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Dieses Jahr
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mt-3">
+              Zeige {filteredBerichte.length} von {berichte.length} Berichten
+            </p>
+          </div>
+
           <div className="space-y-4">
-            {berichte.length === 0 ? (
+            {filteredBerichte.length === 0 ? (
               <div className="bg-white rounded-lg shadow-md p-8 text-center">
-                <p className="text-gray-500">Dieser Azubi hat noch keine Berichte eingereicht</p>
+                <p className="text-gray-500">
+                  {berichte.length === 0 
+                    ? 'Dieser Azubi hat noch keine Berichte eingereicht' 
+                    : 'Keine Berichte im ausgewählten Zeitraum'}
+                </p>
               </div>
             ) : (
-              berichte.map((bericht) => (
+              filteredBerichte.map((bericht) => (
                 <div key={bericht.id} className="bg-white rounded-lg shadow-md p-6">
                   {bericht.ueberarbeitet && bericht.status === 'pending' && (
                     <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start">
@@ -634,21 +773,6 @@ const App = () => {
                       </div>
                     </div>
                   )}
-
-                  <div className="flex gap-2 mb-4">
-                    <button
-                      onClick={() => handleViewPdf(bericht.pdf_data)}
-                      className="flex-1 bg-gray-100 text-gray-700 py-2 px-4 rounded hover:bg-gray-200 transition-colors font-medium"
-                    >
-                      PDF ansehen
-                    </button>
-                    <button
-                      onClick={() => handleDownloadPdf(bericht.pdf_data, bericht.id)}
-                      className="bg-gray-100 text-gray-700 py-2 px-4 rounded hover:bg-gray-200 transition-colors"
-                    >
-                      <Download className="w-4 h-4" />
-                    </button>
-                  </div>
 
                   {bericht.status === 'pending' && (
                     <div className="space-y-3 pt-4 border-t">
