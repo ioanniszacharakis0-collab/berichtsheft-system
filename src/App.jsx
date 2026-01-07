@@ -19,6 +19,7 @@ const BerichtsheftSystem = () => {
     details: ''
   });
   const [bearbeitenModus, setBearbeitenModus] = useState(null); // Für Bearbeitung abgelehnter Berichte
+  const [selectedAzubi, setSelectedAzubi] = useState(null); // Für Ausbilder: Ausgewählter Azubi
 
   useEffect(() => {
     if (currentUser) {
@@ -78,6 +79,7 @@ const BerichtsheftSystem = () => {
     setBerichte([]);
     setLoginData({ username: '', password: '' });
     setError('');
+    setSelectedAzubi(null);
   };
 
   const loadBerichte = async () => {
@@ -122,8 +124,9 @@ const BerichtsheftSystem = () => {
             stunden: parseFloat(neuerBericht.stunden),
             details: neuerBericht.details,
             status: 'ausstehend',
-            kommentar: '',
-            bearbeitet_am: null
+            kommentar: 'Bericht wurde vom Azubi überarbeitet und erneut eingereicht.',
+            bearbeitet_am: new Date().toISOString(),
+            ueberarbeitet: true
           })
         });
         alert('Bericht erfolgreich überarbeitet und neu eingereicht!');
@@ -180,7 +183,8 @@ const BerichtsheftSystem = () => {
         body: JSON.stringify({
           status,
           kommentar,
-          bearbeitet_am: new Date().toISOString()
+          bearbeitet_am: new Date().toISOString(),
+          ueberarbeitet: false // Reset nach Prüfung
         })
       });
 
