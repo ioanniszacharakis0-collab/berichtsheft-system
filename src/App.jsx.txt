@@ -1,0 +1,580 @@
+import React, { useState, useEffect } from 'react';
+import { FileText, CheckCircle, XCircle, Clock, Upload, LogOut, User, Download, AlertCircle } from 'lucide-react';
+
+// ⚠️ WICHTIG: Ersetze diese Werte mit deinen Supabase Credentials!
+const SUPABASE_URL = 'https://lgdrcttylguqrhvvedvx.supabase.co';  // z.B. https://xyz.supabase.co
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxnZHJjdHR5bGd1cXJodnZlZHZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3NzM3OTgsImV4cCI6MjA4MzM0OTc5OH0.xwmLr5wbIf4aLwP8UOmVxfc56NUIk6qAU6rMEIbdnYg';  // Dein anon/public key
+
+const BerichtsheftSystem = () => {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [berichte, setBerichte] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [loginData, setLoginData] = useState({ username: '', password: '' });
+  const [neuerBericht, setNeuerBericht] = useState({
+    datumVon: '',
+    datumBis: '',
+    taetigkeit: '',
+    stunden: '',
+    details: ''
+  });
+
+  useEffect(() => {
+    if (currentUser) {
+      loadBerichte();
+    }
+  }, [currentUser]);
+
+  // Supabase API Call Helper
+  const supabaseCall = async (endpoint, options = {}) => {
+    if (SUPABASE_URL === 'DEINE_SUPABASE_URL_HIER') {
+      setError('⚠️ Bitte trage deine Supabase URL und Key im Code ein!');
+      return null;
+    }
+
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, {
+      ...options,
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+        ...options.headers
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API Error: ${errorText}`);
+    }
+
+    return response.json();
+  };
+
+  const handleLogin = async () => {
+    setLoading(true);
+    setError('');
+    
+    try {
+      const users = await supabaseCall(
+        `users?username=eq.${loginData.username}&password=eq.${loginData.password}&select=*`
+      );
+
+      if (users && users.length > 0) {
+        setCurrentUser(users[0]);
+      } else {
+        setError('Falscher Benutzername oder Passwort!');
+      }
+    } catch (err) {
+      setError('Login fehlgeschlagen: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setBerichte([]);
+    setLoginData({ username: '', password: '' });
+    setError('');
+  };
+
+  const loadBerichte = async () => {
+    setLoading(true);
+    try {
+      let query = 'berichte?select=*&order=created_at.desc';
+      
+      if (currentUser.role === 'azubi') {
+        query += `&user_id=eq.${currentUser.id}`;
+      }
+
+      const data = await supabaseCall(query);
+      setBerichte(data || []);
+    } catch (err) {
+      setError('Fehler beim Laden der Berichte: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const berichtEinreichen = async () => {
+    if (!neuerBericht.datumVon || !neuerBericht.datumBis || !neuerBericht.taetigkeit || !neuerBericht.stunden) {
+      alert('Bitte fülle alle Pflichtfelder aus!');
+      return;
+    }
+
+    if (new Date(neuerBericht.datumVon) > new Date(neuerBericht.datumBis)) {
+      alert('Das "Von"-Datum muss vor dem "Bis"-Datum liegen!');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const neueBerichte = await supabaseCall('berichte', {
+        method: 'POST',
+        body: JSON.stringify({
+          user_id: currentUser.id,
+          azubi_name: currentUser.name,
+          datum_von: neuerBericht.datumVon,
+          datum_bis: neuerBericht.datumBis,
+          taetigkeit: neuerBericht.taetigkeit,
+          stunden: parseFloat(neuerBericht.stunden),
+          details: neuerBericht.details,
+          status: 'ausstehend'
+        })
+      });
+
+      if (neueBerichte) {
+        await loadBerichte();
+        setNeuerBericht({ datumVon: '', datumBis: '', taetigkeit: '', stunden: '', details: '' });
+        alert('Bericht erfolgreich eingereicht!');
+      }
+    } catch (err) {
+      setError('Fehler beim Einreichen: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const berichtBearbeiten = async (berichtId, status, kommentar = '') => {
+    setLoading(true);
+    try {
+      await supabaseCall(`berichte?id=eq.${berichtId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status,
+          kommentar,
+          bearbeitet_am: new Date().toISOString()
+        })
+      });
+
+      await loadBerichte();
+    } catch (err) {
+      setError('Fehler beim Bearbeiten: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'freigegeben':
+        return <CheckCircle className="text-green-500" size={20} />;
+      case 'abgelehnt':
+        return <XCircle className="text-red-500" size={20} />;
+      default:
+        return <Clock className="text-yellow-500" size={20} />;
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'freigegeben':
+        return 'Freigegeben';
+      case 'abgelehnt':
+        return 'Abgelehnt';
+      default:
+        return 'Ausstehend';
+    }
+  };
+
+  const downloadPDF = () => {
+    const azubiBerichte = berichte.filter(b => b.user_id === currentUser.id);
+    
+    if (azubiBerichte.length === 0) {
+      alert('Keine Berichte zum Herunterladen vorhanden!');
+      return;
+    }
+
+    let pdfContent = `
+DIGITALES BERICHTSHEFT
+======================================
+Auszubildende/r: ${currentUser.name}
+Erstellt am: ${new Date().toLocaleString('de-DE')}
+Anzahl Berichte: ${azubiBerichte.length}
+======================================
+
+`;
+
+    azubiBerichte.forEach((bericht, index) => {
+      pdfContent += `
+BERICHT ${index + 1}
+--------------------------------------
+Zeitraum: ${bericht.datum_von} bis ${bericht.datum_bis}
+Tätigkeit: ${bericht.taetigkeit}
+Stunden: ${bericht.stunden}h
+Status: ${getStatusText(bericht.status)}
+Eingereicht am: ${new Date(bericht.eingereicht_am).toLocaleString('de-DE')}
+
+Details:
+${bericht.details || 'Keine Details angegeben'}
+
+${bericht.kommentar ? `Kommentar vom Ausbilder:\n${bericht.kommentar}\nBearbeitet am: ${new Date(bericht.bearbeitet_am).toLocaleString('de-DE')}\n` : ''}
+======================================
+
+`;
+    });
+
+    const blob = new Blob([pdfContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Berichtsheft_${currentUser.name.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
+          <div className="text-center mb-8">
+            <FileText className="mx-auto text-indigo-600 mb-4" size={48} />
+            <h1 className="text-3xl font-bold text-gray-800">Digitales Berichtsheft</h1>
+            <p className="text-gray-600 mt-2">Mit Supabase Backend</p>
+          </div>
+
+          {error && (
+            <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 rounded flex items-start gap-3">
+              <AlertCircle className="text-red-500 flex-shrink-0" size={20} />
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Benutzername
+              </label>
+              <input
+                type="text"
+                value={loginData.username}
+                onChange={(e) => setLoginData({ ...loginData, username: e.target.value })}
+                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                placeholder="Benutzername eingeben"
+                disabled={loading}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Passwort
+              </label>
+              <input
+                type="password"
+                value={loginData.password}
+                onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
+                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                placeholder="Passwort eingeben"
+                disabled={loading}
+              />
+            </div>
+
+            <button
+              onClick={handleLogin}
+              disabled={loading}
+              className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Wird geladen...' : 'Anmelden'}
+            </button>
+          </div>
+
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg text-sm">
+            <p className="font-semibold text-gray-700 mb-2">Demo-Zugänge:</p>
+            <p className="text-gray-600">Azubi: <code className="bg-white px-2 py-1 rounded">azubi / azubi123</code></p>
+            <p className="text-gray-600">Ausbilder: <code className="bg-white px-2 py-1 rounded">ausbilder / ausbilder123</code></p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentUser.role === 'azubi') {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-indigo-600 text-white p-4 shadow-lg">
+          <div className="max-w-6xl mx-auto flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <FileText size={28} />
+              <div>
+                <h1 className="text-xl font-bold">Digitales Berichtsheft</h1>
+                <p className="text-sm text-indigo-100">Willkommen, {currentUser.name}</p>
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 bg-indigo-700 hover:bg-indigo-800 px-4 py-2 rounded-lg transition"
+            >
+              <LogOut size={18} />
+              Abmelden
+            </button>
+          </div>
+        </header>
+
+        {error && (
+          <div className="max-w-6xl mx-auto p-6">
+            <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded flex items-start gap-3">
+              <AlertCircle className="text-red-500 flex-shrink-0" size={20} />
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="max-w-6xl mx-auto p-6">
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Upload size={24} className="text-indigo-600" />
+                Neuen Bericht einreichen
+              </h2>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Von (Datum) *
+                    </label>
+                    <input
+                      type="date"
+                      value={neuerBericht.datumVon}
+                      onChange={(e) => setNeuerBericht({ ...neuerBericht, datumVon: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Bis (Datum) *
+                    </label>
+                    <input
+                      type="date"
+                      value={neuerBericht.datumBis}
+                      onChange={(e) => setNeuerBericht({ ...neuerBericht, datumBis: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tätigkeit *
+                  </label>
+                  <input
+                    type="text"
+                    value={neuerBericht.taetigkeit}
+                    onChange={(e) => setNeuerBericht({ ...neuerBericht, taetigkeit: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    placeholder="z.B. Kundenberatung, Programmierung..."
+                    disabled={loading}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Stunden *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={neuerBericht.stunden}
+                    onChange={(e) => setNeuerBericht({ ...neuerBericht, stunden: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    placeholder="z.B. 8"
+                    disabled={loading}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Details
+                  </label>
+                  <textarea
+                    value={neuerBericht.details}
+                    onChange={(e) => setNeuerBericht({ ...neuerBericht, details: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 h-24"
+                    placeholder="Beschreibe deine Tätigkeiten genauer..."
+                    disabled={loading}
+                  />
+                </div>
+
+                <button
+                  onClick={berichtEinreichen}
+                  disabled={loading}
+                  className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Wird eingereicht...' : 'Bericht einreichen'}
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-800">Meine Berichte</h2>
+                {berichte.length > 0 && (
+                  <button
+                    onClick={downloadPDF}
+                    className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition text-sm font-medium"
+                  >
+                    <Download size={18} />
+                    Als PDF
+                  </button>
+                )}
+              </div>
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {loading ? (
+                  <p className="text-gray-500 text-center py-8">Lädt...</p>
+                ) : berichte.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">Noch keine Berichte vorhanden</p>
+                ) : (
+                  berichte.map((bericht) => (
+                    <div key={bericht.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <p className="font-semibold text-gray-800">{bericht.taetigkeit}</p>
+                          <p className="text-sm text-gray-600">{bericht.datum_von} bis {bericht.datum_bis} • {bericht.stunden}h</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {getStatusIcon(bericht.status)}
+                          <span className="text-sm font-medium">{getStatusText(bericht.status)}</span>
+                        </div>
+                      </div>
+                      {bericht.details && (
+                        <p className="text-sm text-gray-600 mt-2">{bericht.details}</p>
+                      )}
+                      {bericht.kommentar && (
+                        <div className="mt-3 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+                          <p className="text-sm font-medium text-gray-700">Kommentar vom Ausbilder:</p>
+                          <p className="text-sm text-gray-600 mt-1">{bericht.kommentar}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-green-600 text-white p-4 shadow-lg">
+        <div className="max-w-6xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <User size={28} />
+            <div>
+              <h1 className="text-xl font-bold">Ausbilder-Dashboard</h1>
+              <p className="text-sm text-green-100">Willkommen, {currentUser.name}</p>
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 bg-green-700 hover:bg-green-800 px-4 py-2 rounded-lg transition"
+          >
+            <LogOut size={18} />
+            Abmelden
+          </button>
+        </div>
+      </header>
+
+      {error && (
+        <div className="max-w-6xl mx-auto p-6">
+          <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded flex items-start gap-3">
+            <AlertCircle className="text-red-500 flex-shrink-0" size={20} />
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-6xl mx-auto p-6">
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-2xl font-bold text-gray-800 mb-6">Eingereichte Berichte prüfen</h2>
+          
+          {loading ? (
+            <p className="text-gray-500 text-center py-12">Lädt Berichte...</p>
+          ) : berichte.length === 0 ? (
+            <p className="text-gray-500 text-center py-12">Noch keine Berichte eingereicht</p>
+          ) : (
+            <div className="space-y-4">
+              {berichte.map((bericht) => (
+                <div key={bericht.id} className="border border-gray-200 rounded-lg p-6 hover:shadow-lg transition">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-lg font-bold text-gray-800">{bericht.taetigkeit}</h3>
+                        <div className="flex items-center gap-2">
+                          {getStatusIcon(bericht.status)}
+                          <span className="text-sm font-medium">{getStatusText(bericht.status)}</span>
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        Azubi: {bericht.azubi_name} • Zeitraum: {bericht.datum_von} bis {bericht.datum_bis} • Stunden: {bericht.stunden}h
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Eingereicht am: {new Date(bericht.eingereicht_am).toLocaleString('de-DE')}
+                      </p>
+                    </div>
+                  </div>
+
+                  {bericht.details && (
+                    <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                      <p className="text-sm font-medium text-gray-700 mb-1">Details:</p>
+                      <p className="text-sm text-gray-600">{bericht.details}</p>
+                    </div>
+                  )}
+
+                  {bericht.status === 'ausstehend' && (
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => {
+                          const kommentar = prompt('Optional: Kommentar zur Freigabe hinzufügen');
+                          berichtBearbeiten(bericht.id, 'freigegeben', kommentar || '');
+                        }}
+                        disabled={loading}
+                        className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        <CheckCircle size={18} />
+                        Freigeben
+                      </button>
+                      <button
+                        onClick={() => {
+                          const kommentar = prompt('Bitte gib einen Grund für die Ablehnung an:');
+                          if (kommentar) {
+                            berichtBearbeiten(bericht.id, 'abgelehnt', kommentar);
+                          }
+                        }}
+                        disabled={loading}
+                        className="flex-1 bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        <XCircle size={18} />
+                        Ablehnen
+                      </button>
+                    </div>
+                  )}
+
+                  {bericht.status !== 'ausstehend' && bericht.kommentar && (
+                    <div className="mt-3 p-3 bg-blue-50 border-l-4 border-blue-400 rounded">
+                      <p className="text-sm font-medium text-gray-700">Ihr Kommentar:</p>
+                      <p className="text-sm text-gray-600 mt-1">{bericht.kommentar}</p>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Bearbeitet am: {bericht.bearbeitet_am ? new Date(bericht.bearbeitet_am).toLocaleString('de-DE') : 'N/A'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default BerichtsheftSystem;
