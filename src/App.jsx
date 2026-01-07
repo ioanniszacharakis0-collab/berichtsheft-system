@@ -619,12 +619,12 @@ const BerichtsheftSystem = () => {
                         </div>
                       </div>
                       {bericht.details && (
-                        <p className="text-sm text-gray-600 mt-2">{bericht.details}</p>
+                        <p className="text-sm text-gray-600 mt-2 break-words whitespace-pre-wrap overflow-hidden">{bericht.details}</p>
                       )}
                       {bericht.kommentar && (
                         <div className="mt-3 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded">
                           <p className="text-sm font-medium text-gray-700">Kommentar vom Ausbilder:</p>
-                          <p className="text-sm text-gray-600 mt-1">{bericht.kommentar}</p>
+                          <p className="text-sm text-gray-600 mt-1 break-words whitespace-pre-wrap overflow-hidden">{bericht.kommentar}</p>
                           {bericht.status === 'abgelehnt' && (
                             <button
                               onClick={() => berichtBearbeiten(bericht)}
