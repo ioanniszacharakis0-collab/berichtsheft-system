@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { FileText, CheckCircle, XCircle, Clock, Upload, LogOut, User, Download, AlertCircle } from 'lucide-react';
 
 // ⚠️ WICHTIG: Ersetze diese Werte mit deinen Supabase Credentials!
-const SUPABASE_URL = 'https://lgdrcttylguqrhvvedvx.supabase.co';  // z.B. https://xyz.supabase.co
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxnZHJjdHR5bGd1cXJodnZlZHZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3NzM3OTgsImV4cCI6MjA4MzM0OTc5OH0.xwmLr5wbIf4aLwP8UOmVxfc56NUIk6qAU6rMEIbdnYg';  // Dein anon/public key
+const SUPABASE_URL = 'DEINE_SUPABASE_URL_HIER';  // z.B. https://xyz.supabase.co
+const SUPABASE_KEY = 'DEIN_SUPABASE_ANON_KEY_HIER';  // Dein anon/public key
 
 const BerichtsheftSystem = () => {
   const [currentUser, setCurrentUser] = useState(null);
@@ -186,44 +186,170 @@ const BerichtsheftSystem = () => {
       return;
     }
 
-    let pdfContent = `
-DIGITALES BERICHTSHEFT
-======================================
-Auszubildende/r: ${currentUser.name}
-Erstellt am: ${new Date().toLocaleString('de-DE')}
-Anzahl Berichte: ${azubiBerichte.length}
-======================================
+    // Erstelle ein neues Fenster mit druckbarer Seite
+    const printWindow = window.open('', '_blank');
+    
+    let htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Berichtsheft ${currentUser.name}</title>
+        <style>
+          @media print {
+            @page { margin: 2cm; }
+            body { margin: 0; }
+          }
+          body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+          }
+          .header {
+            text-align: center;
+            border-bottom: 3px solid #4F46E5;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+          }
+          .header h1 {
+            color: #4F46E5;
+            margin: 0;
+            font-size: 28px;
+          }
+          .header p {
+            color: #666;
+            margin: 5px 0;
+          }
+          .bericht {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+          }
+          .bericht-header {
+            background: #F3F4F6;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+          }
+          .bericht-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1F2937;
+            margin-bottom: 5px;
+          }
+          .bericht-meta {
+            color: #6B7280;
+            font-size: 14px;
+          }
+          .status {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+          }
+          .status-freigegeben { background: #D1FAE5; color: #065F46; }
+          .status-abgelehnt { background: #FEE2E2; color: #991B1B; }
+          .status-ausstehend { background: #FEF3C7; color: #92400E; }
+          .details {
+            background: #F9FAFB;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 10px;
+          }
+          .details-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+          }
+          .kommentar {
+            background: #FEF3C7;
+            border-left: 4px solid #F59E0B;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 5px;
+          }
+          .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            color: #666;
+            font-size: 12px;
+          }
+          .print-button {
+            display: block;
+            background: #4F46E5;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 20px auto;
+          }
+          @media print {
+            .print-button { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>📋 Digitales Berichtsheft</h1>
+          <p><strong>Auszubildende/r:</strong> ${currentUser.name}</p>
+          <p><strong>Erstellt am:</strong> ${new Date().toLocaleString('de-DE')}</p>
+          <p><strong>Anzahl Berichte:</strong> ${azubiBerichte.length}</p>
+        </div>
 
-`;
+        <button class="print-button" onclick="window.print()">Als PDF speichern</button>
+    `;
 
     azubiBerichte.forEach((bericht, index) => {
-      pdfContent += `
-BERICHT ${index + 1}
---------------------------------------
-Zeitraum: ${bericht.datum_von} bis ${bericht.datum_bis}
-Tätigkeit: ${bericht.taetigkeit}
-Stunden: ${bericht.stunden}h
-Status: ${getStatusText(bericht.status)}
-Eingereicht am: ${new Date(bericht.eingereicht_am).toLocaleString('de-DE')}
-
-Details:
-${bericht.details || 'Keine Details angegeben'}
-
-${bericht.kommentar ? `Kommentar vom Ausbilder:\n${bericht.kommentar}\nBearbeitet am: ${new Date(bericht.bearbeitet_am).toLocaleString('de-DE')}\n` : ''}
-======================================
-
-`;
+      const statusClass = `status-${bericht.status}`;
+      htmlContent += `
+        <div class="bericht">
+          <div class="bericht-header">
+            <div class="bericht-title">
+              Bericht ${index + 1}: ${bericht.taetigkeit}
+              <span class="status ${statusClass}">${getStatusText(bericht.status)}</span>
+            </div>
+            <div class="bericht-meta">
+              <strong>Zeitraum:</strong> ${bericht.datum_von} bis ${bericht.datum_bis} | 
+              <strong>Stunden:</strong> ${bericht.stunden}h | 
+              <strong>Eingereicht:</strong> ${new Date(bericht.eingereicht_am).toLocaleString('de-DE')}
+            </div>
+          </div>
+          ${bericht.details ? `
+            <div class="details">
+              <div class="details-title">Details:</div>
+              <div>${bericht.details}</div>
+            </div>
+          ` : ''}
+          ${bericht.kommentar ? `
+            <div class="kommentar">
+              <strong>💬 Kommentar vom Ausbilder:</strong><br>
+              ${bericht.kommentar}<br>
+              <small>Bearbeitet am: ${new Date(bericht.bearbeitet_am).toLocaleString('de-DE')}</small>
+            </div>
+          ` : ''}
+        </div>
+      `;
     });
 
-    const blob = new Blob([pdfContent], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Berichtsheft_${currentUser.name.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    htmlContent += `
+        <div class="footer">
+          <p>Digitales Berichtsheft-System | Erstellt mit Supabase & Netlify</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   if (!currentUser) {
@@ -284,9 +410,10 @@ ${bericht.kommentar ? `Kommentar vom Ausbilder:\n${bericht.kommentar}\nBearbeite
           </div>
 
           <div className="mt-6 p-4 bg-gray-50 rounded-lg text-sm">
-            <p className="font-semibold text-gray-700 mb-2">Demo-Zugänge:</p>
+            <p className="font-semibold text-gray-700 mb-2">Demo-Zugänge (falls noch vorhanden):</p>
             <p className="text-gray-600">Azubi: <code className="bg-white px-2 py-1 rounded">azubi / azubi123</code></p>
             <p className="text-gray-600">Ausbilder: <code className="bg-white px-2 py-1 rounded">ausbilder / ausbilder123</code></p>
+            <p className="text-xs text-gray-500 mt-2">Hinweis: Falls diese nicht funktionieren, wurden sie bereits gelöscht.</p>
           </div>
         </div>
       </div>
@@ -390,7 +517,7 @@ ${bericht.kommentar ? `Kommentar vom Ausbilder:\n${bericht.kommentar}\nBearbeite
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Details
+                    Bericht
                   </label>
                   <textarea
                     value={neuerBericht.details}
@@ -465,7 +592,7 @@ ${bericht.kommentar ? `Kommentar vom Ausbilder:\n${bericht.kommentar}\nBearbeite
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-green-600 text-white p-4 shadow-lg">
-        <div className="max-w-6xl mx-auto flex justify-between items-center">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
             <User size={28} />
             <div>
@@ -484,7 +611,7 @@ ${bericht.kommentar ? `Kommentar vom Ausbilder:\n${bericht.kommentar}\nBearbeite
       </header>
 
       {error && (
-        <div className="max-w-6xl mx-auto p-6">
+        <div className="max-w-7xl mx-auto p-6">
           <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded flex items-start gap-3">
             <AlertCircle className="text-red-500 flex-shrink-0" size={20} />
             <p className="text-sm text-red-700">{error}</p>
@@ -492,84 +619,113 @@ ${bericht.kommentar ? `Kommentar vom Ausbilder:\n${bericht.kommentar}\nBearbeite
         </div>
       )}
 
-      <div className="max-w-6xl mx-auto p-6">
+      <div className="max-w-7xl mx-auto p-6">
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Eingereichte Berichte prüfen</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-6">Berichte nach Azubis</h2>
           
           {loading ? (
             <p className="text-gray-500 text-center py-12">Lädt Berichte...</p>
           ) : berichte.length === 0 ? (
             <p className="text-gray-500 text-center py-12">Noch keine Berichte eingereicht</p>
           ) : (
-            <div className="space-y-4">
-              {berichte.map((bericht) => (
-                <div key={bericht.id} className="border border-gray-200 rounded-lg p-6 hover:shadow-lg transition">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-bold text-gray-800">{bericht.taetigkeit}</h3>
-                        <div className="flex items-center gap-2">
-                          {getStatusIcon(bericht.status)}
-                          <span className="text-sm font-medium">{getStatusText(bericht.status)}</span>
-                        </div>
+            (() => {
+              // Gruppiere Berichte nach Azubi
+              const berichteNachAzubi = {};
+              berichte.forEach(bericht => {
+                if (!berichteNachAzubi[bericht.azubi_name]) {
+                  berichteNachAzubi[bericht.azubi_name] = [];
+                }
+                berichteNachAzubi[bericht.azubi_name].push(bericht);
+              });
+
+              return (
+                <div className="space-y-8">
+                  {Object.entries(berichteNachAzubi).map(([azubiName, azubiBerichte]) => (
+                    <div key={azubiName} className="border-2 border-gray-200 rounded-lg p-6 bg-gray-50">
+                      <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-gray-300">
+                        <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                          <User size={24} className="text-green-600" />
+                          {azubiName}
+                        </h3>
+                        <span className="text-sm text-gray-600 bg-white px-3 py-1 rounded-full font-medium">
+                          {azubiBerichte.length} {azubiBerichte.length === 1 ? 'Bericht' : 'Berichte'}
+                        </span>
                       </div>
-                      <p className="text-sm text-gray-600">
-                        Azubi: {bericht.azubi_name} • Zeitraum: {bericht.datum_von} bis {bericht.datum_bis} • Stunden: {bericht.stunden}h
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Eingereicht am: {new Date(bericht.eingereicht_am).toLocaleString('de-DE')}
-                      </p>
-                    </div>
-                  </div>
 
-                  {bericht.details && (
-                    <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                      <p className="text-sm font-medium text-gray-700 mb-1">Details:</p>
-                      <p className="text-sm text-gray-600">{bericht.details}</p>
-                    </div>
-                  )}
+                      <div className="space-y-4">
+                        {azubiBerichte.map((bericht) => (
+                          <div key={bericht.id} className="bg-white border border-gray-200 rounded-lg p-5 hover:shadow-lg transition">
+                            <div className="flex justify-between items-start mb-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-2">
+                                  <h4 className="text-lg font-bold text-gray-800">{bericht.taetigkeit}</h4>
+                                  <div className="flex items-center gap-2">
+                                    {getStatusIcon(bericht.status)}
+                                    <span className="text-sm font-medium">{getStatusText(bericht.status)}</span>
+                                  </div>
+                                </div>
+                                <p className="text-sm text-gray-600">
+                                  Zeitraum: {bericht.datum_von} bis {bericht.datum_bis} • Stunden: {bericht.stunden}h
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Eingereicht am: {new Date(bericht.eingereicht_am).toLocaleString('de-DE')}
+                                </p>
+                              </div>
+                            </div>
 
-                  {bericht.status === 'ausstehend' && (
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => {
-                          const kommentar = prompt('Optional: Kommentar zur Freigabe hinzufügen');
-                          berichtBearbeiten(bericht.id, 'freigegeben', kommentar || '');
-                        }}
-                        disabled={loading}
-                        className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-                      >
-                        <CheckCircle size={18} />
-                        Freigeben
-                      </button>
-                      <button
-                        onClick={() => {
-                          const kommentar = prompt('Bitte gib einen Grund für die Ablehnung an:');
-                          if (kommentar) {
-                            berichtBearbeiten(bericht.id, 'abgelehnt', kommentar);
-                          }
-                        }}
-                        disabled={loading}
-                        className="flex-1 bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-                      >
-                        <XCircle size={18} />
-                        Ablehnen
-                      </button>
-                    </div>
-                  )}
+                            {bericht.details && (
+                              <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                                <p className="text-sm font-medium text-gray-700 mb-1">Bericht:</p>
+                                <p className="text-sm text-gray-600">{bericht.details}</p>
+                              </div>
+                            )}
 
-                  {bericht.status !== 'ausstehend' && bericht.kommentar && (
-                    <div className="mt-3 p-3 bg-blue-50 border-l-4 border-blue-400 rounded">
-                      <p className="text-sm font-medium text-gray-700">Ihr Kommentar:</p>
-                      <p className="text-sm text-gray-600 mt-1">{bericht.kommentar}</p>
-                      <p className="text-xs text-gray-500 mt-2">
-                        Bearbeitet am: {bericht.bearbeitet_am ? new Date(bericht.bearbeitet_am).toLocaleString('de-DE') : 'N/A'}
-                      </p>
+                            {bericht.status === 'ausstehend' && (
+                              <div className="flex gap-3">
+                                <button
+                                  onClick={() => {
+                                    const kommentar = prompt('Optional: Kommentar zur Freigabe hinzufügen');
+                                    berichtBearbeiten(bericht.id, 'freigegeben', kommentar || '');
+                                  }}
+                                  disabled={loading}
+                                  className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                                >
+                                  <CheckCircle size={18} />
+                                  Freigeben
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const kommentar = prompt('Bitte gib einen Grund für die Ablehnung an:');
+                                    if (kommentar) {
+                                      berichtBearbeiten(bericht.id, 'abgelehnt', kommentar);
+                                    }
+                                  }}
+                                  disabled={loading}
+                                  className="flex-1 bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                                >
+                                  <XCircle size={18} />
+                                  Ablehnen
+                                </button>
+                              </div>
+                            )}
+
+                            {bericht.status !== 'ausstehend' && bericht.kommentar && (
+                              <div className="mt-3 p-3 bg-blue-50 border-l-4 border-blue-400 rounded">
+                                <p className="text-sm font-medium text-gray-700">Ihr Kommentar:</p>
+                                <p className="text-sm text-gray-600 mt-1">{bericht.kommentar}</p>
+                                <p className="text-xs text-gray-500 mt-2">
+                                  Bearbeitet am: {bericht.bearbeitet_am ? new Date(bericht.bearbeitet_am).toLocaleString('de-DE') : 'N/A'}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  )}
+                  ))}
                 </div>
-              ))}
-            </div>
+              );
+            })()
           )}
         </div>
       </div>
