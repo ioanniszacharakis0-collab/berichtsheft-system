@@ -14,7 +14,8 @@ const App = () => {
   const [selectedAzubi, setSelectedAzubi] = useState(null);
   const [azubis, setAzubis] = useState([]);
   const [kommentar, setKommentar] = useState('');
-  const [berichtDatum, setBerichtDatum] = useState(new Date().toISOString().split('T')[0]);
+  const [datumVon, setDatumVon] = useState(new Date().toISOString().split('T')[0]);
+  const [datumBis, setDatumBis] = useState(new Date().toISOString().split('T')[0]);
   const [zeitraumFilter, setZeitraumFilter] = useState('alle');
 
   const supabaseRequest = async (endpoint, options = {}) => {
@@ -73,12 +74,12 @@ const App = () => {
 
   const loadBerichte = async (currentUser) => {
     try {
-      let query = 'berichte?select=*&order=datum.desc';
+      let query = 'berichte?select=*&order=datum_von.desc';
       
       if (currentUser.role === 'azubi') {
-        query = `berichte?azubi_id=eq.${currentUser.id}&select=*&order=datum.desc`;
+        query = `berichte?user_id=eq.${currentUser.id}&select=*&order=datum_von.desc`;
       } else if (selectedAzubi) {
-        query = `berichte?azubi_id=eq.${selectedAzubi.id}&select=*&order=datum.desc`;
+        query = `berichte?user_id=eq.${selectedAzubi.id}&select=*&order=datum_von.desc`;
       }
       
       const data = await supabaseRequest(query);
@@ -115,7 +116,7 @@ const App = () => {
         startDatum = new Date(heute.getFullYear(), heute.getMonth() - 1, 1);
         const endDatum = new Date(heute.getFullYear(), heute.getMonth(), 0);
         const filtered = berichte.filter(b => {
-          const berichtDatum = new Date(b.datum);
+          const berichtDatum = new Date(b.datum_von);
           return berichtDatum >= startDatum && berichtDatum <= endDatum;
         });
         setFilteredBerichte(filtered);
@@ -129,7 +130,7 @@ const App = () => {
     }
 
     const filtered = berichte.filter(b => {
-      const berichtDatum = new Date(b.datum);
+      const berichtDatum = new Date(b.datum_von);
       return berichtDatum >= startDatum;
     });
     
@@ -139,22 +140,24 @@ const App = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    const berichtText = document.getElementById('bericht-text').value;
+    const taetigkeit = document.getElementById('taetigkeit-text').value;
+    const details = document.getElementById('details-text').value;
+    const stunden = document.getElementById('stunden-input').value;
     
-    if (!berichtText.trim()) {
-      alert('Bitte gib einen Berichtstext ein');
+    if (!taetigkeit.trim() || !details.trim()) {
+      alert('Bitte fülle alle Pflichtfelder aus');
       return;
     }
 
     try {
       const neuerBericht = {
-        azubi_id: user.id,
+        user_id: user.id,
         azubi_name: user.name,
-        datum: berichtDatum,
-        details: berichtText,
-        status: 'pending',
-        kommentar: null,
-        ueberarbeitet: false
+        datum_von: datumVon,
+        datum_bis: datumBis,
+        taetigkeit: taetigkeit,
+        details: details,
+        stunden: parseFloat(stunden) || 0
       };
 
       await supabaseRequest('berichte', {
@@ -162,66 +165,16 @@ const App = () => {
         body: JSON.stringify(neuerBericht),
       });
 
-      document.getElementById('bericht-text').value = '';
-      setBerichtDatum(new Date().toISOString().split('T')[0]);
+      document.getElementById('taetigkeit-text').value = '';
+      document.getElementById('details-text').value = '';
+      document.getElementById('stunden-input').value = '';
+      setDatumVon(new Date().toISOString().split('T')[0]);
+      setDatumBis(new Date().toISOString().split('T')[0]);
       loadBerichte(user);
       alert('Bericht erfolgreich eingereicht!');
     } catch (error) {
       console.error('Fehler beim Einreichen:', error);
-      alert('Fehler beim Einreichen des Berichts');
-    }
-  };
-
-  const handleApprove = async (berichtId) => {
-    try {
-      await supabaseRequest(`berichte?id=eq.${berichtId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ 
-          status: 'approved',
-          ueberarbeitet: false
-        }),
-      });
-      loadBerichte(user);
-    } catch (error) {
-      console.error('Fehler beim Freigeben:', error);
-    }
-  };
-
-  const handleReject = async (berichtId) => {
-    if (!kommentar.trim()) {
-      alert('Bitte gib einen Kommentar ein');
-      return;
-    }
-
-    try {
-      await supabaseRequest(`berichte?id=eq.${berichtId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ 
-          status: 'rejected',
-          kommentar: kommentar,
-          ueberarbeitet: false
-        }),
-      });
-      setKommentar('');
-      loadBerichte(user);
-    } catch (error) {
-      console.error('Fehler beim Ablehnen:', error);
-    }
-  };
-
-  const handleResubmit = async (berichtId) => {
-    try {
-      await supabaseRequest(`berichte?id=eq.${berichtId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ 
-          status: 'pending',
-          ueberarbeitet: true
-        }),
-      });
-      loadBerichte(user);
-      alert('Bericht wurde zur erneuten Prüfung eingereicht!');
-    } catch (error) {
-      console.error('Fehler beim erneuten Einreichen:', error);
+      alert('Fehler beim Einreichen des Berichts: ' + error.message);
     }
   };
 
@@ -249,32 +202,56 @@ const App = () => {
       
       ctx.font = '14px Arial';
       ctx.fillText(`Azubi: ${bericht.azubi_name}`, 50, 110);
-      ctx.fillText(`Datum: ${new Date(bericht.datum).toLocaleDateString('de-DE')}`, 50, 135);
-      ctx.fillText('Status: Freigegeben', 50, 160);
+      ctx.fillText(`Von: ${new Date(bericht.datum_von).toLocaleDateString('de-DE')}`, 50, 135);
+      ctx.fillText(`Bis: ${new Date(bericht.datum_bis).toLocaleDateString('de-DE')}`, 50, 160);
+      ctx.fillText(`Stunden: ${bericht.stunden}`, 50, 185);
       
       ctx.font = 'bold 14px Arial';
-      ctx.fillText('BERICHT:', 50, 200);
+      ctx.fillText('TÄTIGKEIT:', 50, 225);
       
       ctx.font = '12px Arial';
+      let y = 250;
       const maxWidth = 495;
       const lineHeight = 18;
-      let y = 230;
       
-      const words = bericht.details.split(' ');
+      // Tätigkeit
+      const taetigkeitWords = bericht.taetigkeit.split(' ');
       let line = '';
       
-      for (let i = 0; i < words.length; i++) {
-        const testLine = line + words[i] + ' ';
+      for (let i = 0; i < taetigkeitWords.length; i++) {
+        const testLine = line + taetigkeitWords[i] + ' ';
         const metrics = ctx.measureText(testLine);
         
         if (metrics.width > maxWidth && i > 0) {
           ctx.fillText(line, 50, y);
-          line = words[i] + ' ';
+          line = taetigkeitWords[i] + ' ';
+          y += lineHeight;
+        } else {
+          line = testLine;
+        }
+      }
+      ctx.fillText(line, 50, y);
+      y += lineHeight * 2;
+      
+      // Details
+      ctx.font = 'bold 14px Arial';
+      ctx.fillText('DETAILS:', 50, y);
+      y += 25;
+      
+      ctx.font = '12px Arial';
+      const detailWords = bericht.details.split(' ');
+      line = '';
+      
+      for (let i = 0; i < detailWords.length; i++) {
+        const testLine = line + detailWords[i] + ' ';
+        const metrics = ctx.measureText(testLine);
+        
+        if (metrics.width > maxWidth && i > 0) {
+          ctx.fillText(line, 50, y);
+          line = detailWords[i] + ' ';
           y += lineHeight;
           
-          if (y > 750) {
-            break;
-          }
+          if (y > 750) break;
         } else {
           line = testLine;
         }
@@ -289,7 +266,7 @@ const App = () => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `Bericht_${bericht.azubi_name}_${bericht.datum}.png`;
+        a.download = `Bericht_${bericht.azubi_name}_${bericht.datum_von}.png`;
         a.click();
         URL.revokeObjectURL(url);
       });
@@ -298,30 +275,6 @@ const App = () => {
     } catch (error) {
       console.error('Fehler beim Generieren:', error);
       alert('Fehler beim Erstellen des Berichts');
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'approved': return 'bg-green-100 text-green-800';
-      case 'rejected': return 'bg-red-100 text-red-800';
-      default: return 'bg-yellow-100 text-yellow-800';
-    }
-  };
-
-  const getStatusIcon = (status) => {
-    switch(status) {
-      case 'approved': return <CheckCircle className="w-4 h-4" />;
-      case 'rejected': return <XCircle className="w-4 h-4" />;
-      default: return <Clock className="w-4 h-4" />;
-    }
-  };
-
-  const getStatusText = (status) => {
-    switch(status) {
-      case 'approved': return 'Freigegeben';
-      case 'rejected': return 'Abgelehnt';
-      default: return 'Ausstehend';
     }
   };
 
@@ -413,29 +366,75 @@ const App = () => {
               </h2>
               
               <form onSubmit={handleSubmit} className="space-y-4">
+                {/* DATUM VON */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
                     <Calendar className="w-4 h-4 mr-2" />
-                    Datum des Berichts
+                    Datum von
                   </label>
                   <input
                     type="date"
-                    value={berichtDatum}
-                    onChange={(e) => setBerichtDatum(e.target.value)}
+                    value={datumVon}
+                    onChange={(e) => setDatumVon(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
                   />
                 </div>
 
+                {/* DATUM BIS */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Datum bis
+                  </label>
+                  <input
+                    type="date"
+                    value={datumBis}
+                    onChange={(e) => setDatumBis(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                {/* STUNDEN */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Berichtstext
+                    Stunden
+                  </label>
+                  <input
+                    id="stunden-input"
+                    type="number"
+                    step="0.5"
+                    defaultValue="8"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                {/* TÄTIGKEIT */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tätigkeit
+                  </label>
+                  <input
+                    id="taetigkeit-text"
+                    type="text"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="z.B. Programmierung, Kundengespräch..."
+                    required
+                  />
+                </div>
+
+                {/* DETAILS */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Details
                   </label>
                   <textarea
-                    id="bericht-text"
-                    rows="8"
+                    id="details-text"
+                    rows="6"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Was hast du an diesem Tag gelernt? Beschreibe deine Tätigkeiten..."
+                    placeholder="Beschreibe deine Tätigkeiten im Detail..."
                     required
                   />
                 </div>
@@ -462,22 +461,33 @@ const App = () => {
                 ) : (
                   berichte.map((bericht) => (
                     <div key={bericht.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex-1 min-w-0 mr-2">
-                          <p className="text-sm font-medium text-gray-900">
-                            Bericht vom {new Date(bericht.datum).toLocaleDateString('de-DE')}
-                          </p>
-                        </div>
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(bericht.status)}`}>
-                          {getStatusIcon(bericht.status)}
-                          <span className="ml-1">{getStatusText(bericht.status)}</span>
-                        </span>
+                      <div className="mb-2">
+                        <p className="text-sm font-medium text-gray-900">
+                          {new Date(bericht.datum_von).toLocaleDateString('de-DE')} - {new Date(bericht.datum_bis).toLocaleDateString('de-DE')}
+                        </p>
+                        <p className="text-xs text-gray-500">{bericht.stunden} Stunden</p>
                       </div>
                       
-                      {/* ULTRA TEXT WRAPPING - AZUBI */}
-                      <div className="w-full max-w-full overflow-hidden">
+                      {/* TÄTIGKEIT */}
+                      <div className="w-full max-w-full overflow-hidden mb-2">
+                        <p className="text-xs font-medium text-gray-700">Tätigkeit:</p>
                         <p 
-                          className="text-sm text-gray-600 mt-2 break-all whitespace-pre-wrap"
+                          className="text-sm text-gray-900 break-all whitespace-pre-wrap"
+                          style={{
+                            wordBreak: 'break-all',
+                            overflowWrap: 'anywhere',
+                            maxWidth: '100%'
+                          }}
+                        >
+                          {bericht.taetigkeit}
+                        </p>
+                      </div>
+
+                      {/* DETAILS */}
+                      <div className="w-full max-w-full overflow-hidden">
+                        <p className="text-xs font-medium text-gray-700">Details:</p>
+                        <p 
+                          className="text-sm text-gray-600 break-all whitespace-pre-wrap"
                           style={{
                             wordBreak: 'break-all',
                             overflowWrap: 'anywhere',
@@ -488,41 +498,15 @@ const App = () => {
                         </p>
                       </div>
                       
-                      {bericht.status === 'rejected' && bericht.kommentar && (
-                        <div className="mt-3 p-3 bg-red-50 rounded border border-red-200">
-                          <p className="text-xs font-medium text-red-800 mb-1">Kommentar vom Ausbilder:</p>
-                          <div className="w-full max-w-full overflow-hidden">
-                            <p 
-                              className="text-xs text-red-700 break-all whitespace-pre-wrap"
-                              style={{
-                                wordBreak: 'break-all',
-                                overflowWrap: 'anywhere',
-                                maxWidth: '100%'
-                              }}
-                            >
-                              {bericht.kommentar}
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => handleResubmit(bericht.id)}
-                            className="mt-2 w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition-colors text-sm font-medium"
-                          >
-                            Überarbeiten und erneut einreichen
-                          </button>
-                        </div>
-                      )}
-                      
-                      {bericht.status === 'approved' && (
-                        <div className="mt-3">
-                          <button
-                            onClick={() => generatePdf(bericht)}
-                            className="w-full bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition-colors text-sm font-medium flex items-center justify-center"
-                          >
-                            <Download className="w-4 h-4 mr-2" />
-                            Bericht herunterladen
-                          </button>
-                        </div>
-                      )}
+                      <div className="mt-3">
+                        <button
+                          onClick={() => generatePdf(bericht)}
+                          className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition-colors text-sm font-medium flex items-center justify-center"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          PDF herunterladen
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -673,34 +657,34 @@ const App = () => {
             ) : (
               filteredBerichte.map((bericht) => (
                 <div key={bericht.id} className="bg-white rounded-lg shadow-md p-6">
-                  {/* ÜBERARBEITET HINWEIS */}
-                  {bericht.ueberarbeitet && bericht.status === 'pending' && (
-                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start">
-                      <AlertCircle className="w-5 h-5 text-blue-600 mr-2 flex-shrink-0 mt-0.5" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-blue-800">Überarbeiteter Bericht</p>
-                        <p className="text-xs text-blue-600 mt-1">Dieser Bericht wurde vom Azubi überarbeitet und erneut eingereicht</p>
-                      </div>
-                    </div>
-                  )}
-                  
                   {/* HEADER */}
-                  <div className="flex justify-between items-start mb-4 gap-4">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-lg font-bold text-gray-900">
-                        Bericht vom {new Date(bericht.datum).toLocaleDateString('de-DE')}
-                      </h3>
-                      <p className="text-sm text-gray-600 truncate">von {bericht.azubi_name}</p>
-                    </div>
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium flex-shrink-0 ${getStatusColor(bericht.status)}`}>
-                      {getStatusIcon(bericht.status)}
-                      <span className="ml-1">{getStatusText(bericht.status)}</span>
-                    </span>
+                  <div className="mb-4">
+                    <h3 className="text-lg font-bold text-gray-900">
+                      {new Date(bericht.datum_von).toLocaleDateString('de-DE')} - {new Date(bericht.datum_bis).toLocaleDateString('de-DE')}
+                    </h3>
+                    <p className="text-sm text-gray-600">von {bericht.azubi_name} • {bericht.stunden} Stunden</p>
                   </div>
 
-                  {/* BERICHT TEXT - ULTRA TEXT WRAPPING */}
+                  {/* TÄTIGKEIT */}
                   <div className="mb-4 p-4 bg-gray-50 rounded-lg w-full max-w-full overflow-hidden">
-                    <p className="text-sm font-medium text-gray-700 mb-1">Bericht:</p>
+                    <p className="text-sm font-medium text-gray-700 mb-1">Tätigkeit:</p>
+                    <div className="w-full max-w-full overflow-hidden">
+                      <p 
+                        className="text-sm text-gray-900 break-all whitespace-pre-wrap"
+                        style={{
+                          wordBreak: 'break-all',
+                          overflowWrap: 'anywhere',
+                          maxWidth: '100%'
+                        }}
+                      >
+                        {bericht.taetigkeit}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* DETAILS */}
+                  <div className="mb-4 p-4 bg-gray-50 rounded-lg w-full max-w-full overflow-hidden">
+                    <p className="text-sm font-medium text-gray-700 mb-1">Details:</p>
                     <div className="w-full max-w-full overflow-hidden">
                       <p 
                         className="text-sm text-gray-600 break-all whitespace-pre-wrap"
@@ -714,54 +698,6 @@ const App = () => {
                       </p>
                     </div>
                   </div>
-
-                  {/* KOMMENTAR ANZEIGEN */}
-                  {bericht.status === 'rejected' && bericht.kommentar && (
-                    <div className="mb-4 p-3 bg-red-50 rounded border border-red-200">
-                      <p className="text-sm font-medium text-red-800 mb-1">Dein Kommentar:</p>
-                      <div className="w-full max-w-full overflow-hidden">
-                        <p 
-                          className="text-sm text-red-700 break-all whitespace-pre-wrap"
-                          style={{
-                            wordBreak: 'break-all',
-                            overflowWrap: 'anywhere',
-                            maxWidth: '100%'
-                          }}
-                        >
-                          {bericht.kommentar}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* AKTIONEN */}
-                  {bericht.status === 'pending' && (
-                    <div className="space-y-3 pt-4 border-t">
-                      <textarea
-                        value={kommentar}
-                        onChange={(e) => setKommentar(e.target.value)}
-                        placeholder="Kommentar für Ablehnung (optional)"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        rows="3"
-                      />
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleApprove(bericht.id)}
-                          className="flex-1 bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition-colors font-medium flex items-center justify-center"
-                        >
-                          <CheckCircle className="w-4 h-4 mr-2" />
-                          Freigeben
-                        </button>
-                        <button
-                          onClick={() => handleReject(bericht.id)}
-                          className="flex-1 bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700 transition-colors font-medium flex items-center justify-center"
-                        >
-                          <XCircle className="w-4 h-4 mr-2" />
-                          Ablehnen
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               ))
             )}
@@ -773,4 +709,3 @@ const App = () => {
 };
 
 export default App;
-
