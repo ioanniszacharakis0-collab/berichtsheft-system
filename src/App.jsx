@@ -178,169 +178,172 @@ const App = () => {
     }
   };
 
-  // VERBESSERTES PDF MIT PROFESSIONELLER STRUKTUR
-  const generatePdf = (bericht) => {
+  // ECHTES PDF MIT jsPDF ERSTELLEN
+  const generatePdf = async (bericht) => {
     try {
-      const canvas = document.createElement('canvas');
-      canvas.width = 595;  // A4 Breite
-      canvas.height = 842; // A4 Höhe
-      const ctx = canvas.getContext('2d');
+      // Hilfsfunktion: Bricht lange Wörter ohne Leerzeichen auf
+      const breakLongWords = (text, maxLength) => {
+        const words = text.split(' ');
+        const result = [];
+        
+        for (let word of words) {
+          if (word.length > maxLength) {
+            // Langes Wort in Stücke teilen
+            for (let i = 0; i < word.length; i += maxLength) {
+              result.push(word.substring(i, i + maxLength));
+            }
+          } else {
+            result.push(word);
+          }
+        }
+        
+        return result.join(' ');
+      };
       
-      // Weißer Hintergrund
-      ctx.fillStyle = 'white';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // jsPDF dynamisch laden
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      document.head.appendChild(script);
       
-      const margin = 50;
-      const contentWidth = canvas.width - (margin * 2);
-      let y = margin;
-      
-      // ===== HEADER =====
-      ctx.fillStyle = '#1e40af'; // Blau
-      ctx.fillRect(0, 0, canvas.width, 80);
-      
-      ctx.fillStyle = 'white';
-      ctx.font = 'bold 24px Arial';
-      ctx.fillText('AUSBILDUNGSNACHWEIS', margin, 50);
-      
-      y = 100;
-      
-      // ===== INFO BOX =====
-      ctx.fillStyle = '#f3f4f6'; // Hellgrau
-      ctx.fillRect(margin, y, contentWidth, 100);
-      
-      ctx.fillStyle = '#374151'; // Dunkelgrau
-      ctx.font = 'bold 14px Arial';
-      ctx.fillText('AUSZUBILDENDE/R', margin + 15, y + 25);
-      
-      ctx.font = '12px Arial';
-      ctx.fillStyle = '#1f2937';
-      ctx.fillText(bericht.azubi_name, margin + 15, y + 45);
-      
-      // Zeitraum
-      ctx.font = 'bold 14px Arial';
-      ctx.fillStyle = '#374151';
-      ctx.fillText('ZEITRAUM', margin + 15, y + 70);
-      
-      ctx.font = '12px Arial';
-      ctx.fillStyle = '#1f2937';
-      const zeitraumText = `${new Date(bericht.datum_von).toLocaleDateString('de-DE')} - ${new Date(bericht.datum_bis).toLocaleDateString('de-DE')}`;
-      ctx.fillText(zeitraumText, margin + 15, y + 90);
-      
-      // Stunden (rechts)
-      ctx.font = 'bold 14px Arial';
-      ctx.fillStyle = '#374151';
-      ctx.fillText('STUNDEN', margin + contentWidth - 120, y + 25);
-      
-      ctx.font = 'bold 20px Arial';
-      ctx.fillStyle = '#1e40af';
-      ctx.fillText(bericht.stunden.toString(), margin + contentWidth - 120, y + 55);
-      
-      y += 120;
-      
-      // ===== TÄTIGKEIT SECTION =====
-      ctx.fillStyle = '#1e40af';
-      ctx.fillRect(margin, y, contentWidth, 30);
-      
-      ctx.fillStyle = 'white';
-      ctx.font = 'bold 14px Arial';
-      ctx.fillText('TÄTIGKEIT', margin + 15, y + 20);
-      
-      y += 45;
-      
-      // Tätigkeit Text mit Umbruch
-      ctx.fillStyle = '#1f2937';
-      ctx.font = '12px Arial';
-      y = wrapText(ctx, bericht.taetigkeit, margin + 15, y, contentWidth - 30, 18);
-      
-      y += 25;
-      
-      // ===== DETAILS SECTION =====
-      ctx.fillStyle = '#1e40af';
-      ctx.fillRect(margin, y, contentWidth, 30);
-      
-      ctx.fillStyle = 'white';
-      ctx.font = 'bold 14px Arial';
-      ctx.fillText('AUSFÜHRLICHE BESCHREIBUNG', margin + 15, y + 20);
-      
-      y += 45;
-      
-      // Details Text mit Umbruch
-      ctx.fillStyle = '#1f2937';
-      ctx.font = '12px Arial';
-      y = wrapText(ctx, bericht.details, margin + 15, y, contentWidth - 30, 18);
-      
-      // ===== FOOTER =====
-      ctx.fillStyle = '#9ca3af';
-      ctx.font = '10px Arial';
-      ctx.fillText(`Erstellt am ${new Date().toLocaleDateString('de-DE')}`, margin, 820);
-      
-      // Unterschriften-Linie (wenn Platz ist)
-      if (y < 700) {
-        y = 700;
-        ctx.strokeStyle = '#d1d5db';
-        ctx.lineWidth = 1;
+      script.onload = () => {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        const margin = 15;
+        const pageWidth = 210; // A4 mm
+        const contentWidth = pageWidth - (margin * 2);
+        let y = margin;
+        
+        // ===== BLAUER HEADER =====
+        doc.setFillColor(30, 64, 175); // Blau
+        doc.rect(0, 0, pageWidth, 30, 'F');
+        
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(20);
+        doc.setFont('helvetica', 'bold');
+        doc.text('AUSBILDUNGSNACHWEIS', margin, 20);
+        
+        y = 40;
+        
+        // ===== INFO BOX =====
+        doc.setFillColor(243, 244, 246); // Hellgrau
+        doc.rect(margin, y, contentWidth, 35, 'F');
+        
+        // Azubi Info
+        doc.setTextColor(55, 65, 81);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('AUSZUBILDENDE/R', margin + 5, y + 8);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(31, 41, 55);
+        doc.setFontSize(9);
+        doc.text(bericht.azubi_name, margin + 5, y + 15);
+        
+        // Zeitraum
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(55, 65, 81);
+        doc.setFontSize(10);
+        doc.text('ZEITRAUM', margin + 5, y + 23);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(31, 41, 55);
+        doc.setFontSize(9);
+        const zeitraumText = `${new Date(bericht.datum_von).toLocaleDateString('de-DE')} - ${new Date(bericht.datum_bis).toLocaleDateString('de-DE')}`;
+        doc.text(zeitraumText, margin + 5, y + 30);
+        
+        // Stunden (rechts)
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(55, 65, 81);
+        doc.setFontSize(10);
+        doc.text('STUNDEN', pageWidth - margin - 30, y + 8);
+        
+        doc.setFontSize(16);
+        doc.setTextColor(30, 64, 175);
+        doc.text(bericht.stunden.toString(), pageWidth - margin - 30, y + 20);
+        
+        y += 45;
+        
+        // ===== TÄTIGKEIT SECTION =====
+        doc.setFillColor(30, 64, 175);
+        doc.rect(margin, y, contentWidth, 10, 'F');
+        
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text('TÄTIGKEIT', margin + 5, y + 7);
+        
+        y += 15;
+        
+        // Tätigkeit Text mit ECHTER Umbrechung
+        doc.setTextColor(31, 41, 55);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        
+        // Breche lange Wörter auf
+        const taetigkeitBroken = breakLongWords(bericht.taetigkeit, 80);
+        const taetigkeitLines = doc.splitTextToSize(taetigkeitBroken, contentWidth - 10);
+        doc.text(taetigkeitLines, margin + 5, y);
+        y += taetigkeitLines.length * 5 + 10;
+        
+        // ===== DETAILS SECTION =====
+        doc.setFillColor(30, 64, 175);
+        doc.rect(margin, y, contentWidth, 10, 'F');
+        
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text('AUSFÜHRLICHE BESCHREIBUNG', margin + 5, y + 7);
+        
+        y += 15;
+        
+        // Details Text mit ECHTER Umbrechung
+        doc.setTextColor(31, 41, 55);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        
+        // Breche lange Wörter auf
+        const detailsBroken = breakLongWords(bericht.details, 80);
+        const detailsLines = doc.splitTextToSize(detailsBroken, contentWidth - 10);
+        doc.text(detailsLines, margin + 5, y);
+        y += detailsLines.length * 5 + 20;
+        
+        // ===== UNTERSCHRIFTEN =====
+        if (y < 240) {
+          y = 240;
+        }
         
         // Azubi Unterschrift
-        ctx.beginPath();
-        ctx.moveTo(margin, y);
-        ctx.lineTo(margin + 180, y);
-        ctx.stroke();
+        doc.setDrawColor(209, 213, 219);
+        doc.setLineWidth(0.5);
+        doc.line(margin, y, margin + 60, y);
         
-        ctx.fillStyle = '#6b7280';
-        ctx.font = '10px Arial';
-        ctx.fillText('Unterschrift Auszubildende/r', margin, y + 15);
+        doc.setTextColor(107, 114, 128);
+        doc.setFontSize(8);
+        doc.text('Unterschrift Auszubildende/r', margin, y + 5);
         
         // Ausbilder Unterschrift
-        ctx.beginPath();
-        ctx.moveTo(margin + contentWidth - 180, y);
-        ctx.lineTo(margin + contentWidth, y);
-        ctx.stroke();
+        doc.line(pageWidth - margin - 60, y, pageWidth - margin, y);
+        doc.text('Unterschrift Ausbilder/in', pageWidth - margin - 60, y + 5);
         
-        ctx.fillText('Unterschrift Ausbilder/in', margin + contentWidth - 180, y + 15);
-      }
+        // ===== FOOTER =====
+        doc.setTextColor(156, 163, 175);
+        doc.setFontSize(8);
+        doc.text(`Erstellt am ${new Date().toLocaleDateString('de-DE')}`, margin, 285);
+        
+        // PDF Speichern
+        doc.save(`Ausbildungsnachweis_${bericht.azubi_name}_${bericht.datum_von}.pdf`);
+        
+        alert('PDF wird heruntergeladen...');
+      };
       
-      // Download
-      canvas.toBlob((blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Ausbildungsnachweis_${bericht.azubi_name}_${bericht.datum_von}.png`;
-        a.click();
-        URL.revokeObjectURL(url);
-      });
-      
-      alert('Professioneller Ausbildungsnachweis wird heruntergeladen...');
+      script.onerror = () => {
+        alert('Fehler beim Laden der PDF-Bibliothek');
+      };
     } catch (error) {
       console.error('Fehler beim Generieren:', error);
-      alert('Fehler beim Erstellen des Berichts');
+      alert('Fehler beim Erstellen des PDFs');
     }
-  };
-  
-  // Hilfsfunktion für Textumbruch
-  const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
-    const words = text.split(' ');
-    let line = '';
-    
-    for (let i = 0; i < words.length; i++) {
-      const testLine = line + words[i] + ' ';
-      const metrics = ctx.measureText(testLine);
-      
-      if (metrics.width > maxWidth && i > 0) {
-        ctx.fillText(line, x, y);
-        line = words[i] + ' ';
-        y += lineHeight;
-        
-        // Seitenende prüfen
-        if (y > 750) {
-          ctx.fillText('...', x, y);
-          return y;
-        }
-      } else {
-        line = testLine;
-      }
-    }
-    ctx.fillText(line, x, y);
-    return y + lineHeight;
   };
 
   // LOGIN SCREEN
