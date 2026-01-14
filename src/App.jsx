@@ -89,7 +89,6 @@ const App = () => {
     }
   };
 
-  // Zeitraum Filter anwenden
   const filterBerichteByZeitraum = (zeitraum) => {
     setZeitraumFilter(zeitraum);
     
@@ -107,7 +106,7 @@ const App = () => {
         break;
       case 'diese-woche':
         startDatum = new Date(heute);
-        startDatum.setDate(heute.getDate() - heute.getDay() + 1); // Montag
+        startDatum.setDate(heute.getDate() - heute.getDay() + 1);
         break;
       case 'dieser-monat':
         startDatum = new Date(heute.getFullYear(), heute.getMonth(), 1);
@@ -326,6 +325,7 @@ const App = () => {
     }
   };
 
+  // LOGIN SCREEN
   if (!user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -380,6 +380,7 @@ const App = () => {
     );
   }
 
+  // AZUBI DASHBOARD
   if (user.role === 'azubi') {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -404,6 +405,7 @@ const App = () => {
 
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="grid md:grid-cols-2 gap-8">
+            {/* BERICHT EINREICHEN */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
                 <Upload className="w-6 h-6 mr-2 text-blue-600" />
@@ -411,7 +413,6 @@ const App = () => {
               </h2>
               
               <form onSubmit={handleSubmit} className="space-y-4">
-                {/* DATUMSWAHL FÜR AZUBI */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
                     <Calendar className="w-4 h-4 mr-2" />
@@ -448,13 +449,14 @@ const App = () => {
               </form>
             </div>
 
+            {/* MEINE BERICHTE */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
                 <FileText className="w-6 h-6 mr-2 text-blue-600" />
                 Meine Berichte
               </h2>
               
-              <div className="space-y-3 max-h-96 overflow-y-auto">
+              <div className="space-y-3 max-h-[600px] overflow-y-auto">
                 {berichte.length === 0 ? (
                   <p className="text-gray-500 text-center py-8">Noch keine Berichte eingereicht</p>
                 ) : (
@@ -472,39 +474,34 @@ const App = () => {
                         </span>
                       </div>
                       
-                      <div className="max-w-full overflow-hidden">
-                        <div className="max-w-full overflow-hidden">
-                          <p 
-                            className="text-sm text-gray-600 mt-2 break-all whitespace-pre-wrap"
-                            style={{
-                              wordBreak: 'break-all',
-                              overflowWrap: 'anywhere',
-                              maxWidth: '100%',
-                              width: '100%'
-                            }}
-                          >
-                            {bericht.details}
-                          </p>
-                        </div>
+                      {/* ULTRA TEXT WRAPPING - AZUBI */}
+                      <div className="w-full max-w-full overflow-hidden">
+                        <p 
+                          className="text-sm text-gray-600 mt-2 break-all whitespace-pre-wrap"
+                          style={{
+                            wordBreak: 'break-all',
+                            overflowWrap: 'anywhere',
+                            maxWidth: '100%'
+                          }}
+                        >
+                          {bericht.details}
+                        </p>
                       </div>
                       
                       {bericht.status === 'rejected' && bericht.kommentar && (
                         <div className="mt-3 p-3 bg-red-50 rounded border border-red-200">
                           <p className="text-xs font-medium text-red-800 mb-1">Kommentar vom Ausbilder:</p>
-                          <div className="max-w-full overflow-hidden">
-                            <div className="max-w-full overflow-hidden">
-                              <p 
-                                className="text-xs text-red-700 break-all whitespace-pre-wrap"
-                                style={{
-                                  wordBreak: 'break-all',
-                                  overflowWrap: 'anywhere',
-                                  maxWidth: '100%',
-                                  width: '100%'
-                                }}
-                              >
-                                {bericht.kommentar}
-                              </p>
-                            </div>
+                          <div className="w-full max-w-full overflow-hidden">
+                            <p 
+                              className="text-xs text-red-700 break-all whitespace-pre-wrap"
+                              style={{
+                                wordBreak: 'break-all',
+                                overflowWrap: 'anywhere',
+                                maxWidth: '100%'
+                              }}
+                            >
+                              {bericht.kommentar}
+                            </p>
                           </div>
                           <button
                             onClick={() => handleResubmit(bericht.id)}
@@ -537,7 +534,9 @@ const App = () => {
     );
   }
 
+  // AUSBILDER DASHBOARD
   if (user.role === 'ausbilder') {
+    // AZUBI-KARTEN ANSICHT
     if (!selectedAzubi) {
       return (
         <div className="min-h-screen bg-gray-50">
@@ -567,6 +566,7 @@ const App = () => {
                 Azubis
               </h2>
               
+              {/* AZUBI KARTEN */}
               <div className="grid md:grid-cols-2 gap-4">
                 {azubis.map((azubi) => (
                   <button
@@ -578,9 +578,9 @@ const App = () => {
                     className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-md transition-all text-left"
                   >
                     <div className="flex items-center">
-                      <User className="w-10 h-10 text-blue-600 mr-3" />
-                      <div>
-                        <p className="font-medium text-gray-900">{azubi.name}</p>
+                      <User className="w-10 h-10 text-blue-600 mr-3 flex-shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-gray-900 truncate">{azubi.name}</p>
                         <p className="text-sm text-gray-500">Berichte ansehen →</p>
                       </div>
                     </div>
@@ -593,11 +593,12 @@ const App = () => {
       );
     }
 
+    // BERICHTE ANSICHT FÜR GEWÄHLTEN AZUBI
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="bg-white shadow-sm border-b">
           <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <div className="flex items-center">
+            <div className="flex items-center min-w-0">
               <button
                 onClick={() => {
                   setSelectedAzubi(null);
@@ -605,19 +606,21 @@ const App = () => {
                   setFilteredBerichte([]);
                   setZeitraumFilter('alle');
                 }}
-                className="mr-4 text-blue-600 hover:text-blue-800"
+                className="mr-4 text-blue-600 hover:text-blue-800 flex-shrink-0"
               >
                 ← Zurück
               </button>
-              <FileText className="w-8 h-8 text-blue-600 mr-3" />
-              <div>
-                <h1 className="text-xl font-bold text-gray-800">Berichte von {selectedAzubi.name}</h1>
-                <p className="text-sm text-gray-600">{user.name}</p>
+              <FileText className="w-8 h-8 text-blue-600 mr-3 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <h1 className="text-xl font-bold text-gray-800 truncate">
+                  Berichte von {selectedAzubi.name}
+                </h1>
+                <p className="text-sm text-gray-600 truncate">{user.name}</p>
               </div>
             </div>
             <button
               onClick={() => setUser(null)}
-              className="flex items-center text-gray-600 hover:text-gray-800"
+              className="flex items-center text-gray-600 hover:text-gray-800 flex-shrink-0 ml-4"
             >
               <LogOut className="w-5 h-5 mr-2" />
               Abmelden
@@ -629,76 +632,35 @@ const App = () => {
           {/* ZEITRAUM FILTER */}
           <div className="bg-white rounded-lg shadow-md p-4 mb-6">
             <div className="flex items-center mb-3">
-              <Filter className="w-5 h-5 text-blue-600 mr-2" />
+              <Filter className="w-5 h-5 text-blue-600 mr-2 flex-shrink-0" />
               <h3 className="font-medium text-gray-800">Zeitraum filtern:</h3>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => filterBerichteByZeitraum('alle')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  zeitraumFilter === 'alle' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Alle
-              </button>
-              <button
-                onClick={() => filterBerichteByZeitraum('heute')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  zeitraumFilter === 'heute' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Heute
-              </button>
-              <button
-                onClick={() => filterBerichteByZeitraum('diese-woche')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  zeitraumFilter === 'diese-woche' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Diese Woche
-              </button>
-              <button
-                onClick={() => filterBerichteByZeitraum('dieser-monat')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  zeitraumFilter === 'dieser-monat' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Dieser Monat
-              </button>
-              <button
-                onClick={() => filterBerichteByZeitraum('letzter-monat')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  zeitraumFilter === 'letzter-monat' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Letzter Monat
-              </button>
-              <button
-                onClick={() => filterBerichteByZeitraum('dieses-jahr')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  zeitraumFilter === 'dieses-jahr' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Dieses Jahr
-              </button>
+              {['alle', 'heute', 'diese-woche', 'dieser-monat', 'letzter-monat', 'dieses-jahr'].map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => filterBerichteByZeitraum(filter)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    zeitraumFilter === filter 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {filter === 'alle' && 'Alle'}
+                  {filter === 'heute' && 'Heute'}
+                  {filter === 'diese-woche' && 'Diese Woche'}
+                  {filter === 'dieser-monat' && 'Dieser Monat'}
+                  {filter === 'letzter-monat' && 'Letzter Monat'}
+                  {filter === 'dieses-jahr' && 'Dieses Jahr'}
+                </button>
+              ))}
             </div>
             <p className="text-sm text-gray-600 mt-3">
               Zeige {filteredBerichte.length} von {berichte.length} Berichten
             </p>
           </div>
 
+          {/* BERICHTE LISTE */}
           <div className="space-y-4">
             {filteredBerichte.length === 0 ? (
               <div className="bg-white rounded-lg shadow-md p-8 text-center">
@@ -711,69 +673,68 @@ const App = () => {
             ) : (
               filteredBerichte.map((bericht) => (
                 <div key={bericht.id} className="bg-white rounded-lg shadow-md p-6">
+                  {/* ÜBERARBEITET HINWEIS */}
                   {bericht.ueberarbeitet && bericht.status === 'pending' && (
                     <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start">
                       <AlertCircle className="w-5 h-5 text-blue-600 mr-2 flex-shrink-0 mt-0.5" />
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-blue-800">Überarbeiteter Bericht</p>
                         <p className="text-xs text-blue-600 mt-1">Dieser Bericht wurde vom Azubi überarbeitet und erneut eingereicht</p>
                       </div>
                     </div>
                   )}
                   
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
+                  {/* HEADER */}
+                  <div className="flex justify-between items-start mb-4 gap-4">
+                    <div className="min-w-0 flex-1">
                       <h3 className="text-lg font-bold text-gray-900">
                         Bericht vom {new Date(bericht.datum).toLocaleDateString('de-DE')}
                       </h3>
-                      <p className="text-sm text-gray-600">von {bericht.azubi_name}</p>
+                      <p className="text-sm text-gray-600 truncate">von {bericht.azubi_name}</p>
                     </div>
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(bericht.status)}`}>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium flex-shrink-0 ${getStatusColor(bericht.status)}`}>
                       {getStatusIcon(bericht.status)}
                       <span className="ml-1">{getStatusText(bericht.status)}</span>
                     </span>
                   </div>
 
-                  <div className="mb-4 p-4 bg-gray-50 rounded-lg max-w-full overflow-hidden">
+                  {/* BERICHT TEXT - ULTRA TEXT WRAPPING */}
+                  <div className="mb-4 p-4 bg-gray-50 rounded-lg w-full max-w-full overflow-hidden">
                     <p className="text-sm font-medium text-gray-700 mb-1">Bericht:</p>
-                    <div className="max-w-full overflow-hidden">
-                      <div className="max-w-full overflow-hidden">
-                        <p 
-                          className="text-sm text-gray-600 break-all whitespace-pre-wrap"
-                          style={{
-                            wordBreak: 'break-all',
-                            overflowWrap: 'anywhere',
-                            maxWidth: '100%',
-                            width: '100%'
-                          }}
-                        >
-                          {bericht.details}
-                        </p>
-                      </div>
+                    <div className="w-full max-w-full overflow-hidden">
+                      <p 
+                        className="text-sm text-gray-600 break-all whitespace-pre-wrap"
+                        style={{
+                          wordBreak: 'break-all',
+                          overflowWrap: 'anywhere',
+                          maxWidth: '100%'
+                        }}
+                      >
+                        {bericht.details}
+                      </p>
                     </div>
                   </div>
 
+                  {/* KOMMENTAR ANZEIGEN */}
                   {bericht.status === 'rejected' && bericht.kommentar && (
                     <div className="mb-4 p-3 bg-red-50 rounded border border-red-200">
                       <p className="text-sm font-medium text-red-800 mb-1">Dein Kommentar:</p>
-                      <div className="max-w-full overflow-hidden">
-                        <div className="max-w-full overflow-hidden">
-                          <p 
-                            className="text-sm text-red-700 break-all whitespace-pre-wrap"
-                            style={{
-                              wordBreak: 'break-all',
-                              overflowWrap: 'anywhere',
-                              maxWidth: '100%',
-                              width: '100%'
-                            }}
-                          >
-                            {bericht.kommentar}
-                          </p>
-                        </div>
+                      <div className="w-full max-w-full overflow-hidden">
+                        <p 
+                          className="text-sm text-red-700 break-all whitespace-pre-wrap"
+                          style={{
+                            wordBreak: 'break-all',
+                            overflowWrap: 'anywhere',
+                            maxWidth: '100%'
+                          }}
+                        >
+                          {bericht.kommentar}
+                        </p>
                       </div>
                     </div>
                   )}
 
+                  {/* AKTIONEN */}
                   {bericht.status === 'pending' && (
                     <div className="space-y-3 pt-4 border-t">
                       <textarea
