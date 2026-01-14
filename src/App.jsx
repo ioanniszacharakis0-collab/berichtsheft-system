@@ -178,104 +178,169 @@ const App = () => {
     }
   };
 
+  // VERBESSERTES PDF MIT PROFESSIONELLER STRUKTUR
   const generatePdf = (bericht) => {
     try {
       const canvas = document.createElement('canvas');
-      canvas.width = 595;
-      canvas.height = 842;
+      canvas.width = 595;  // A4 Breite
+      canvas.height = 842; // A4 Höhe
       const ctx = canvas.getContext('2d');
       
+      // Weißer Hintergrund
       ctx.fillStyle = 'white';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      ctx.fillStyle = 'black';
+      const margin = 50;
+      const contentWidth = canvas.width - (margin * 2);
+      let y = margin;
+      
+      // ===== HEADER =====
+      ctx.fillStyle = '#1e40af'; // Blau
+      ctx.fillRect(0, 0, canvas.width, 80);
+      
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 24px Arial';
+      ctx.fillText('AUSBILDUNGSNACHWEIS', margin, 50);
+      
+      y = 100;
+      
+      // ===== INFO BOX =====
+      ctx.fillStyle = '#f3f4f6'; // Hellgrau
+      ctx.fillRect(margin, y, contentWidth, 100);
+      
+      ctx.fillStyle = '#374151'; // Dunkelgrau
+      ctx.font = 'bold 14px Arial';
+      ctx.fillText('AUSZUBILDENDE/R', margin + 15, y + 25);
+      
+      ctx.font = '12px Arial';
+      ctx.fillStyle = '#1f2937';
+      ctx.fillText(bericht.azubi_name, margin + 15, y + 45);
+      
+      // Zeitraum
+      ctx.font = 'bold 14px Arial';
+      ctx.fillStyle = '#374151';
+      ctx.fillText('ZEITRAUM', margin + 15, y + 70);
+      
+      ctx.font = '12px Arial';
+      ctx.fillStyle = '#1f2937';
+      const zeitraumText = `${new Date(bericht.datum_von).toLocaleDateString('de-DE')} - ${new Date(bericht.datum_bis).toLocaleDateString('de-DE')}`;
+      ctx.fillText(zeitraumText, margin + 15, y + 90);
+      
+      // Stunden (rechts)
+      ctx.font = 'bold 14px Arial';
+      ctx.fillStyle = '#374151';
+      ctx.fillText('STUNDEN', margin + contentWidth - 120, y + 25);
       
       ctx.font = 'bold 20px Arial';
-      ctx.fillText('AUSBILDUNGSNACHWEIS', 50, 60);
+      ctx.fillStyle = '#1e40af';
+      ctx.fillText(bericht.stunden.toString(), margin + contentWidth - 120, y + 55);
       
-      ctx.strokeStyle = 'black';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(50, 75);
-      ctx.lineTo(545, 75);
-      ctx.stroke();
+      y += 120;
       
-      ctx.font = '14px Arial';
-      ctx.fillText(`Azubi: ${bericht.azubi_name}`, 50, 110);
-      ctx.fillText(`Von: ${new Date(bericht.datum_von).toLocaleDateString('de-DE')}`, 50, 135);
-      ctx.fillText(`Bis: ${new Date(bericht.datum_bis).toLocaleDateString('de-DE')}`, 50, 160);
-      ctx.fillText(`Stunden: ${bericht.stunden}`, 50, 185);
+      // ===== TÄTIGKEIT SECTION =====
+      ctx.fillStyle = '#1e40af';
+      ctx.fillRect(margin, y, contentWidth, 30);
       
+      ctx.fillStyle = 'white';
       ctx.font = 'bold 14px Arial';
-      ctx.fillText('TÄTIGKEIT:', 50, 225);
+      ctx.fillText('TÄTIGKEIT', margin + 15, y + 20);
       
+      y += 45;
+      
+      // Tätigkeit Text mit Umbruch
+      ctx.fillStyle = '#1f2937';
       ctx.font = '12px Arial';
-      let y = 250;
-      const maxWidth = 495;
-      const lineHeight = 18;
+      y = wrapText(ctx, bericht.taetigkeit, margin + 15, y, contentWidth - 30, 18);
       
-      // Tätigkeit
-      const taetigkeitWords = bericht.taetigkeit.split(' ');
-      let line = '';
-      
-      for (let i = 0; i < taetigkeitWords.length; i++) {
-        const testLine = line + taetigkeitWords[i] + ' ';
-        const metrics = ctx.measureText(testLine);
-        
-        if (metrics.width > maxWidth && i > 0) {
-          ctx.fillText(line, 50, y);
-          line = taetigkeitWords[i] + ' ';
-          y += lineHeight;
-        } else {
-          line = testLine;
-        }
-      }
-      ctx.fillText(line, 50, y);
-      y += lineHeight * 2;
-      
-      // Details
-      ctx.font = 'bold 14px Arial';
-      ctx.fillText('DETAILS:', 50, y);
       y += 25;
       
+      // ===== DETAILS SECTION =====
+      ctx.fillStyle = '#1e40af';
+      ctx.fillRect(margin, y, contentWidth, 30);
+      
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 14px Arial';
+      ctx.fillText('AUSFÜHRLICHE BESCHREIBUNG', margin + 15, y + 20);
+      
+      y += 45;
+      
+      // Details Text mit Umbruch
+      ctx.fillStyle = '#1f2937';
       ctx.font = '12px Arial';
-      const detailWords = bericht.details.split(' ');
-      line = '';
+      y = wrapText(ctx, bericht.details, margin + 15, y, contentWidth - 30, 18);
       
-      for (let i = 0; i < detailWords.length; i++) {
-        const testLine = line + detailWords[i] + ' ';
-        const metrics = ctx.measureText(testLine);
-        
-        if (metrics.width > maxWidth && i > 0) {
-          ctx.fillText(line, 50, y);
-          line = detailWords[i] + ' ';
-          y += lineHeight;
-          
-          if (y > 750) break;
-        } else {
-          line = testLine;
-        }
-      }
-      ctx.fillText(line, 50, y);
-      
+      // ===== FOOTER =====
+      ctx.fillStyle = '#9ca3af';
       ctx.font = '10px Arial';
-      ctx.fillStyle = '#666666';
-      ctx.fillText(`Erstellt am ${new Date().toLocaleDateString('de-DE')}`, 50, 800);
+      ctx.fillText(`Erstellt am ${new Date().toLocaleDateString('de-DE')}`, margin, 820);
       
+      // Unterschriften-Linie (wenn Platz ist)
+      if (y < 700) {
+        y = 700;
+        ctx.strokeStyle = '#d1d5db';
+        ctx.lineWidth = 1;
+        
+        // Azubi Unterschrift
+        ctx.beginPath();
+        ctx.moveTo(margin, y);
+        ctx.lineTo(margin + 180, y);
+        ctx.stroke();
+        
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '10px Arial';
+        ctx.fillText('Unterschrift Auszubildende/r', margin, y + 15);
+        
+        // Ausbilder Unterschrift
+        ctx.beginPath();
+        ctx.moveTo(margin + contentWidth - 180, y);
+        ctx.lineTo(margin + contentWidth, y);
+        ctx.stroke();
+        
+        ctx.fillText('Unterschrift Ausbilder/in', margin + contentWidth - 180, y + 15);
+      }
+      
+      // Download
       canvas.toBlob((blob) => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `Bericht_${bericht.azubi_name}_${bericht.datum_von}.png`;
+        a.download = `Ausbildungsnachweis_${bericht.azubi_name}_${bericht.datum_von}.png`;
         a.click();
         URL.revokeObjectURL(url);
       });
       
-      alert('Bericht wird heruntergeladen...');
+      alert('Professioneller Ausbildungsnachweis wird heruntergeladen...');
     } catch (error) {
       console.error('Fehler beim Generieren:', error);
       alert('Fehler beim Erstellen des Berichts');
     }
+  };
+  
+  // Hilfsfunktion für Textumbruch
+  const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
+    const words = text.split(' ');
+    let line = '';
+    
+    for (let i = 0; i < words.length; i++) {
+      const testLine = line + words[i] + ' ';
+      const metrics = ctx.measureText(testLine);
+      
+      if (metrics.width > maxWidth && i > 0) {
+        ctx.fillText(line, x, y);
+        line = words[i] + ' ';
+        y += lineHeight;
+        
+        // Seitenende prüfen
+        if (y > 750) {
+          ctx.fillText('...', x, y);
+          return y;
+        }
+      } else {
+        line = testLine;
+      }
+    }
+    ctx.fillText(line, x, y);
+    return y + lineHeight;
   };
 
   // LOGIN SCREEN
@@ -366,7 +431,6 @@ const App = () => {
               </h2>
               
               <form onSubmit={handleSubmit} className="space-y-4">
-                {/* DATUM VON */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
                     <Calendar className="w-4 h-4 mr-2" />
@@ -381,7 +445,6 @@ const App = () => {
                   />
                 </div>
 
-                {/* DATUM BIS */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
                     <Calendar className="w-4 h-4 mr-2" />
@@ -396,7 +459,6 @@ const App = () => {
                   />
                 </div>
 
-                {/* STUNDEN */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Stunden
@@ -411,7 +473,6 @@ const App = () => {
                   />
                 </div>
 
-                {/* TÄTIGKEIT */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Tätigkeit
@@ -425,7 +486,6 @@ const App = () => {
                   />
                 </div>
 
-                {/* DETAILS */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Details
@@ -468,7 +528,6 @@ const App = () => {
                         <p className="text-xs text-gray-500">{bericht.stunden} Stunden</p>
                       </div>
                       
-                      {/* TÄTIGKEIT */}
                       <div className="w-full max-w-full overflow-hidden mb-2">
                         <p className="text-xs font-medium text-gray-700">Tätigkeit:</p>
                         <p 
@@ -483,7 +542,6 @@ const App = () => {
                         </p>
                       </div>
 
-                      {/* DETAILS */}
                       <div className="w-full max-w-full overflow-hidden">
                         <p className="text-xs font-medium text-gray-700">Details:</p>
                         <p 
@@ -520,7 +578,6 @@ const App = () => {
 
   // AUSBILDER DASHBOARD
   if (user.role === 'ausbilder') {
-    // AZUBI-KARTEN ANSICHT
     if (!selectedAzubi) {
       return (
         <div className="min-h-screen bg-gray-50">
@@ -550,7 +607,6 @@ const App = () => {
                 Azubis
               </h2>
               
-              {/* AZUBI KARTEN */}
               <div className="grid md:grid-cols-2 gap-4">
                 {azubis.map((azubi) => (
                   <button
@@ -577,7 +633,6 @@ const App = () => {
       );
     }
 
-    // BERICHTE ANSICHT FÜR GEWÄHLTEN AZUBI
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="bg-white shadow-sm border-b">
@@ -613,7 +668,6 @@ const App = () => {
         </div>
 
         <div className="max-w-4xl mx-auto px-4 py-8">
-          {/* ZEITRAUM FILTER */}
           <div className="bg-white rounded-lg shadow-md p-4 mb-6">
             <div className="flex items-center mb-3">
               <Filter className="w-5 h-5 text-blue-600 mr-2 flex-shrink-0" />
@@ -644,7 +698,6 @@ const App = () => {
             </p>
           </div>
 
-          {/* BERICHTE LISTE */}
           <div className="space-y-4">
             {filteredBerichte.length === 0 ? (
               <div className="bg-white rounded-lg shadow-md p-8 text-center">
@@ -657,7 +710,6 @@ const App = () => {
             ) : (
               filteredBerichte.map((bericht) => (
                 <div key={bericht.id} className="bg-white rounded-lg shadow-md p-6">
-                  {/* HEADER */}
                   <div className="mb-4">
                     <h3 className="text-lg font-bold text-gray-900">
                       {new Date(bericht.datum_von).toLocaleDateString('de-DE')} - {new Date(bericht.datum_bis).toLocaleDateString('de-DE')}
@@ -665,7 +717,6 @@ const App = () => {
                     <p className="text-sm text-gray-600">von {bericht.azubi_name} • {bericht.stunden} Stunden</p>
                   </div>
 
-                  {/* TÄTIGKEIT */}
                   <div className="mb-4 p-4 bg-gray-50 rounded-lg w-full max-w-full overflow-hidden">
                     <p className="text-sm font-medium text-gray-700 mb-1">Tätigkeit:</p>
                     <div className="w-full max-w-full overflow-hidden">
@@ -682,7 +733,6 @@ const App = () => {
                     </div>
                   </div>
 
-                  {/* DETAILS */}
                   <div className="mb-4 p-4 bg-gray-50 rounded-lg w-full max-w-full overflow-hidden">
                     <p className="text-sm font-medium text-gray-700 mb-1">Details:</p>
                     <div className="w-full max-w-full overflow-hidden">
