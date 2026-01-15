@@ -945,42 +945,39 @@ const App = () => {
                     </div>
                   )}
 
-                  {/* FREIGEBEN / ABLEHNEN BUTTONS */}
-                  {(!bericht.status || bericht.status === 'pending') && (
-                    <div className="flex gap-2 pt-4 border-t">
-                      <button
-                        onClick={() => handleApprove(bericht.id)}
-                        className="flex-1 bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition-colors font-medium flex items-center justify-center"
-                      >
-                        <CheckCircle className="w-4 h-4 mr-2" />
-                        Freigeben
-                      </button>
-                      <button
-                        onClick={() => handleReject(bericht.id)}
-                        className="flex-1 bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700 transition-colors font-medium flex items-center justify-center"
-                      >
-                        <XCircle className="w-4 h-4 mr-2" />
-                        Ablehnen
-                      </button>
-                    </div>
-                  )}
+                  {/* FREIGEBEN / ABLEHNEN BUTTONS - IMMER ANZEIGEN */}
+                  <div className="flex gap-2 pt-4 border-t mt-4">
+                    <button
+                      onClick={() => handleApprove(bericht.id)}
+                      className="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center shadow-md"
+                    >
+                      <CheckCircle className="w-5 h-5 mr-2" />
+                      Freigeben
+                    </button>
+                    <button
+                      onClick={() => handleReject(bericht.id)}
+                      className="flex-1 bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center justify-center shadow-md"
+                    >
+                      <XCircle className="w-5 h-5 mr-2" />
+                      Ablehnen
+                    </button>
+                  </div>
 
-                  {/* INFO FÜR BEREITS BEARBEITETE BERICHTE */}
+                  {/* STATUS INFO */}
                   {bericht.status === 'approved' && (
-                    <div className="pt-4 border-t">
-                      <div className="p-3 bg-green-50 rounded-lg flex items-center">
-                        <CheckCircle className="w-5 h-5 text-green-600 mr-2 flex-shrink-0" />
-                        <p className="text-sm text-green-800">Dieser Bericht wurde bereits freigegeben</p>
-                      </div>
+                    <div className="mt-3 p-3 bg-green-50 rounded-lg flex items-center border border-green-200">
+                      <CheckCircle className="w-5 h-5 text-green-600 mr-2 flex-shrink-0" />
+                      <p className="text-sm text-green-800 font-medium">✓ Bereits freigegeben</p>
                     </div>
                   )}
 
-                  {bericht.status === 'rejected' && (
-                    <div className="pt-4 border-t">
-                      <div className="p-3 bg-red-50 rounded-lg flex items-center">
+                  {bericht.status === 'rejected' && bericht.kommentar && (
+                    <div className="mt-3 p-3 bg-red-50 rounded-lg border border-red-200">
+                      <div className="flex items-center mb-2">
                         <XCircle className="w-5 h-5 text-red-600 mr-2 flex-shrink-0" />
-                        <p className="text-sm text-red-800">Dieser Bericht wurde abgelehnt und wartet auf Überarbeitung</p>
+                        <p className="text-sm text-red-800 font-medium">✗ Abgelehnt - Dein Kommentar:</p>
                       </div>
+                      <p className="text-sm text-red-700 ml-7">{bericht.kommentar}</p>
                     </div>
                   )}
                 </div>
