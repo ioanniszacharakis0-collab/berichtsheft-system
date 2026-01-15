@@ -45,14 +45,26 @@ const App = () => {
     setLoginError('');
     
     try {
-      const users = await supabaseRequest(
-        `users?username=eq.${username}&password=eq.${password}&select=*`
-      );
+      // Nutze die sichere Login-Funktion
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/secure_login`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          p_username: username,
+          p_password: password
+        })
+      });
       
-      if (users && users.length > 0) {
-        setUser(users[0]);
-        loadBerichte(users[0]);
-        if (users[0].role === 'ausbilder') {
+      const data = await response.json();
+      
+      if (data && data.length > 0) {
+        setUser(data[0]);
+        loadBerichte(data[0]);
+        if (data[0].role === 'ausbilder') {
           loadAzubis();
         }
       } else {
