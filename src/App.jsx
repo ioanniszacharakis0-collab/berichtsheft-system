@@ -18,6 +18,54 @@ const App = () => {
   const [datumBis, setDatumBis] = useState(new Date().toISOString().split('T')[0]);
   const [zeitraumFilter, setZeitraumFilter] = useState('alle');
   const [sortierung, setSortierung] = useState('datum-neu'); // neu: Sortierung
+  const [inactivityTimer, setInactivityTimer] = useState(null);
+
+  // Auto-Logout nach 30 Minuten Inaktivität
+  const AUTO_LOGOUT_TIME = 30 * 60 * 1000; // 30 Minuten in Millisekunden
+
+  const resetInactivityTimer = () => {
+    // Alten Timer löschen
+    if (inactivityTimer) {
+      clearTimeout(inactivityTimer);
+    }
+
+    // Neuen Timer setzen
+    const newTimer = setTimeout(() => {
+      if (user) {
+        alert('Du wurdest nach 30 Minuten Inaktivität automatisch abgemeldet.');
+        setUser(null);
+        setBerichte([]);
+        setFilteredBerichte([]);
+      }
+    }, AUTO_LOGOUT_TIME);
+
+    setInactivityTimer(newTimer);
+  };
+
+  // Event Listener für User-Aktivität
+  useEffect(() => {
+    if (user) {
+      // Events die als "Aktivität" zählen
+      const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+      
+      events.forEach(event => {
+        window.addEventListener(event, resetInactivityTimer);
+      });
+
+      // Initialen Timer starten
+      resetInactivityTimer();
+
+      // Cleanup
+      return () => {
+        events.forEach(event => {
+          window.removeEventListener(event, resetInactivityTimer);
+        });
+        if (inactivityTimer) {
+          clearTimeout(inactivityTimer);
+        }
+      };
+    }
+  }, [user]);
 
   const supabaseRequest = async (endpoint, options = {}) => {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, {
@@ -216,21 +264,26 @@ const App = () => {
     }
 
     try {
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/insert_bericht`, {
+      // Direkter INSERT in die Tabelle
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/berichte`, {
         method: 'POST',
         headers: {
           'apikey': SUPABASE_KEY,
           'Authorization': `Bearer ${SUPABASE_KEY}`,
           'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
         },
         body: JSON.stringify({
-          p_user_id: user.id,
-          p_azubi_name: user.name,
-          p_datum_von: datumVon,
-          p_datum_bis: datumBis,
-          p_taetigkeit: taetigkeit,
-          p_details: details,
-          p_stunden: parseFloat(stunden) || 0
+          user_id: user.id, // ID ist schon im richtigen Format
+          azubi_name: user.name,
+          datum_von: datumVon,
+          datum_bis: datumBis,
+          taetigkeit: taetigkeit,
+          details: details,
+          stunden: parseFloat(stunden) || 0,
+          status: 'pending',
+          kommentar: null,
+          ueberarbeitet: false
         })
       });
 
@@ -243,6 +296,8 @@ const App = () => {
         loadBerichte(user);
         alert('Bericht erfolgreich eingereicht!');
       } else {
+        const errorText = await response.text();
+        console.error('Server error:', errorText);
         throw new Error('Fehler beim Einreichen');
       }
     } catch (error) {
@@ -336,6 +391,213 @@ const App = () => {
     } catch (error) {
       console.error('Fehler beim erneuten Einreichen:', error);
     }
+  };
+
+  // SAMMEL-PDF ERSTELLEN
+  const generateSammelPdf = async (berichteList) => {
+    if (berichteList.length === 0) {
+      alert('Keine Berichte zum Exportieren!');
+      return;
+    }
+
+    try {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      document.head.appendChild(script);
+      
+      script.onload = () => {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        const margin = 15;
+        const pageWidth = 210;
+        const contentWidth = pageWidth - (margin * 2);
+        
+        // ===== DECKBLATT =====
+        doc.setFillColor(30, 64, 175);
+        doc.rect(0, 0, pageWidth, 297, 'F');
+        
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(32);
+        doc.setFont('helvetica', 'bold');
+        doc.text('AUSBILDUNGSNACHWEIS', pageWidth / 2, 80, { align: 'center' });
+        
+        doc.setFontSize(24);
+        doc.text(selectedAzubi.name, pageWidth / 2, 120, { align: 'center' });
+        
+        doc.setFontSize(16);
+        const ersterBericht = berichteList[berichteList.length - 1];
+        const letzterBericht = berichteList[0];
+        const zeitraum = `${new Date(ersterBericht.datum_von).toLocaleDateString('de-DE')} - ${new Date(letzterBericht.datum_bis).toLocaleDateString('de-DE')}`;
+        doc.text(zeitraum, pageWidth / 2, 150, { align: 'center' });
+        
+        doc.setFontSize(14);
+        doc.text(`${berichteList.length} Berichte`, pageWidth / 2, 170, { align: 'center' });
+        
+        const gesamtStunden = berichteList.reduce((sum, b) => sum + (parseFloat(b.stunden) || 0), 0);
+        doc.text(`${gesamtStunden} Stunden gesamt`, pageWidth / 2, 185, { align: 'center' });
+        
+        doc.setFontSize(10);
+        doc.text(`Erstellt am ${new Date().toLocaleDateString('de-DE')}`, pageWidth / 2, 270, { align: 'center' });
+        
+        // ===== INHALTSVERZEICHNIS =====
+        doc.addPage();
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(20);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Inhaltsverzeichnis', margin, 30);
+        
+        let y = 50;
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        
+        berichteList.forEach((bericht, index) => {
+          const datum = `${new Date(bericht.datum_von).toLocaleDateString('de-DE')} - ${new Date(bericht.datum_bis).toLocaleDateString('de-DE')}`;
+          const seite = 3 + index;
+          
+          doc.text(`${index + 1}. ${datum}`, margin, y);
+          doc.text(`Seite ${seite}`, pageWidth - margin - 20, y);
+          
+          y += 8;
+          
+          if (y > 270) {
+            doc.addPage();
+            y = 30;
+          }
+        });
+        
+        // ===== BERICHTE =====
+        berichteList.forEach((bericht, index) => {
+          doc.addPage();
+          y = margin;
+          
+          // Header
+          doc.setFillColor(30, 64, 175);
+          doc.rect(0, 0, pageWidth, 30, 'F');
+          
+          doc.setTextColor(255, 255, 255);
+          doc.setFontSize(16);
+          doc.setFont('helvetica', 'bold');
+          doc.text(`Bericht ${index + 1}`, margin, 20);
+          
+          y = 40;
+          
+          // Info Box
+          doc.setFillColor(243, 244, 246);
+          doc.rect(margin, y, contentWidth, 35, 'F');
+          
+          doc.setTextColor(55, 65, 81);
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'bold');
+          doc.text('ZEITRAUM', margin + 5, y + 8);
+          
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(31, 41, 55);
+          doc.setFontSize(9);
+          const zeitraumText = `${new Date(bericht.datum_von).toLocaleDateString('de-DE')} - ${new Date(bericht.datum_bis).toLocaleDateString('de-DE')}`;
+          doc.text(zeitraumText, margin + 5, y + 15);
+          
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(55, 65, 81);
+          doc.setFontSize(10);
+          doc.text('STUNDEN', margin + 5, y + 23);
+          
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(31, 41, 55);
+          doc.setFontSize(9);
+          doc.text(bericht.stunden.toString(), margin + 5, y + 30);
+          
+          // Status
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10);
+          doc.text('STATUS', pageWidth - margin - 40, y + 8);
+          
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9);
+          const statusText = bericht.status === 'approved' ? 'Freigegeben' : bericht.status === 'rejected' ? 'Abgelehnt' : 'Ausstehend';
+          const statusColor = bericht.status === 'approved' ? [34, 197, 94] : bericht.status === 'rejected' ? [239, 68, 68] : [234, 179, 8];
+          doc.setTextColor(statusColor[0], statusColor[1], statusColor[2]);
+          doc.text(statusText, pageWidth - margin - 40, y + 15);
+          
+          y += 45;
+          
+          // Tätigkeit
+          doc.setFillColor(30, 64, 175);
+          doc.rect(margin, y, contentWidth, 10, 'F');
+          
+          doc.setTextColor(255, 255, 255);
+          doc.setFontSize(11);
+          doc.setFont('helvetica', 'bold');
+          doc.text('TÄTIGKEIT', margin + 5, y + 7);
+          
+          y += 15;
+          
+          doc.setTextColor(31, 41, 55);
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'normal');
+          
+          const taetigkeitBroken = breakLongWords(bericht.taetigkeit, 80);
+          const taetigkeitLines = doc.splitTextToSize(taetigkeitBroken, contentWidth - 10);
+          doc.text(taetigkeitLines, margin + 5, y);
+          y += taetigkeitLines.length * 5 + 10;
+          
+          // Details
+          doc.setFillColor(30, 64, 175);
+          doc.rect(margin, y, contentWidth, 10, 'F');
+          
+          doc.setTextColor(255, 255, 255);
+          doc.setFontSize(11);
+          doc.setFont('helvetica', 'bold');
+          doc.text('AUSFÜHRLICHE BESCHREIBUNG', margin + 5, y + 7);
+          
+          y += 15;
+          
+          doc.setTextColor(31, 41, 55);
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'normal');
+          
+          const detailsBroken = breakLongWords(bericht.details, 80);
+          const detailsLines = doc.splitTextToSize(detailsBroken, contentWidth - 10);
+          doc.text(detailsLines, margin + 5, y);
+          
+          // Seitenzahl
+          doc.setTextColor(156, 163, 175);
+          doc.setFontSize(8);
+          doc.text(`Seite ${doc.internal.getNumberOfPages()}`, pageWidth / 2, 285, { align: 'center' });
+        });
+        
+        // PDF Speichern
+        const dateiname = `Ausbildungsnachweis_${selectedAzubi.name}_${new Date(ersterBericht.datum_von).toLocaleDateString('de-DE').replace(/\./g, '-')}_bis_${new Date(letzterBericht.datum_bis).toLocaleDateString('de-DE').replace(/\./g, '-')}.pdf`;
+        doc.save(dateiname);
+        
+        alert(`Sammel-PDF mit ${berichteList.length} Berichten wird heruntergeladen!`);
+      };
+      
+      script.onerror = () => {
+        alert('Fehler beim Laden der PDF-Bibliothek');
+      };
+    } catch (error) {
+      console.error('Fehler beim Generieren:', error);
+      alert('Fehler beim Erstellen des Sammel-PDFs');
+    }
+  };
+
+  // Hilfsfunktion für Textumbruch (wird auch für Sammel-PDF genutzt)
+  const breakLongWords = (text, maxLength) => {
+    const words = text.split(' ');
+    const result = [];
+    
+    for (let word of words) {
+      if (word.length > maxLength) {
+        for (let i = 0; i < word.length; i += maxLength) {
+          result.push(word.substring(i, i + maxLength));
+        }
+      } else {
+        result.push(word);
+      }
+    }
+    
+    return result.join(' ');
   };
 
   // ECHTES PDF MIT jsPDF ERSTELLEN
@@ -887,6 +1149,28 @@ const App = () => {
         </div>
 
         <div className="max-w-4xl mx-auto px-4 py-8">
+          {/* SAMMEL-PDF BUTTON */}
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-800 mb-1">Sammel-PDF erstellen</h3>
+                <p className="text-sm text-gray-600">Alle Berichte von {selectedAzubi.name} als ein PDF herunterladen</p>
+              </div>
+              <button
+                onClick={() => generateSammelPdf(filteredBerichte)}
+                disabled={filteredBerichte.length === 0}
+                className={`flex items-center px-6 py-3 rounded-lg font-medium transition-colors ${
+                  filteredBerichte.length === 0
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
+              >
+                <Download className="w-5 h-5 mr-2" />
+                Sammel-PDF ({filteredBerichte.length} Berichte)
+              </button>
+            </div>
+          </div>
+
           {/* FILTER & SORTIERUNG */}
           <div className="bg-white rounded-lg shadow-md p-4 mb-6">
             <div className="flex items-center mb-3">
