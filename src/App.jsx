@@ -19,13 +19,6 @@ const App = () => {
   const [zeitraumFilter, setZeitraumFilter] = useState('alle');
   const [sortierung, setSortierung] = useState('datum-neu'); // neu: Sortierung
 
-  // Lade Berichte wenn Azubi ausgewählt wird
-  useEffect(() => {
-    if (user && user.role === 'ausbilder' && selectedAzubi) {
-      loadBerichte(user);
-    }
-  }, [selectedAzubi]);
-
   const supabaseRequest = async (endpoint, options = {}) => {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, {
       ...options,
@@ -750,12 +743,21 @@ const App = () => {
                 {azubis.map((azubi) => (
                   <button
                     key={azubi.id}
-                    onClick={() => {
+                    onClick={async () => {
                       setSelectedAzubi(azubi);
-                      // Warte bis selectedAzubi gesetzt ist, dann lade Berichte
-                      setTimeout(() => {
-                        loadBerichte({ ...user, role: 'ausbilder' });
-                      }, 0);
+                      setBerichte([]);
+                      setFilteredBerichte([]);
+                      
+                      // Lade Berichte direkt mit der Azubi ID
+                      try {
+                        const query = `berichte?user_id=eq.${azubi.id}&select=*&order=datum_von.desc`;
+                        const data = await supabaseRequest(query);
+                        const berichteData = data || [];
+                        setBerichte(berichteData);
+                        setFilteredBerichte(berichteData);
+                      } catch (error) {
+                        console.error('Fehler beim Laden der Berichte:', error);
+                      }
                     }}
                     className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-md transition-all text-left"
                   >
