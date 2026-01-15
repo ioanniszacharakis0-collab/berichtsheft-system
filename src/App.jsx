@@ -19,6 +19,13 @@ const App = () => {
   const [zeitraumFilter, setZeitraumFilter] = useState('alle');
   const [sortierung, setSortierung] = useState('datum-neu'); // neu: Sortierung
 
+  // Lade Berichte wenn Azubi ausgewählt wird
+  useEffect(() => {
+    if (user && user.role === 'ausbilder' && selectedAzubi) {
+      loadBerichte(user);
+    }
+  }, [selectedAzubi]);
+
   const supabaseRequest = async (endpoint, options = {}) => {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, {
       ...options,
@@ -78,17 +85,22 @@ const App = () => {
       let query = 'berichte?select=*&order=datum_von.desc';
       
       if (currentUser.role === 'azubi') {
+        // Azubi sieht nur seine eigenen Berichte
         query = `berichte?user_id=eq.${currentUser.id}&select=*&order=datum_von.desc`;
-      } else if (selectedAzubi) {
+      } else if (currentUser.role === 'ausbilder' && selectedAzubi) {
+        // Ausbilder sieht nur Berichte vom ausgewählten Azubi
         query = `berichte?user_id=eq.${selectedAzubi.id}&select=*&order=datum_von.desc`;
       }
       
       const data = await supabaseRequest(query);
-      setBerichte(data || []);
-      setFilteredBerichte(data || []);
-      sortiereBerichte(data || [], sortierung);
+      const berichteData = data || [];
+      setBerichte(berichteData);
+      setFilteredBerichte(berichteData);
+      sortiereBerichte(berichteData, sortierung);
     } catch (error) {
       console.error('Fehler beim Laden der Berichte:', error);
+      setBerichte([]);
+      setFilteredBerichte([]);
     }
   };
 
@@ -740,7 +752,10 @@ const App = () => {
                     key={azubi.id}
                     onClick={() => {
                       setSelectedAzubi(azubi);
-                      loadBerichte({ ...user, role: 'ausbilder' });
+                      // Warte bis selectedAzubi gesetzt ist, dann lade Berichte
+                      setTimeout(() => {
+                        loadBerichte({ ...user, role: 'ausbilder' });
+                      }, 0);
                     }}
                     className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-md transition-all text-left"
                   >
