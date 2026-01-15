@@ -78,7 +78,16 @@ const App = () => {
 
   const loadAzubis = async () => {
     try {
-      const azubiUsers = await supabaseRequest('users?role=eq.azubi&select=*');
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_azubis`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({})
+      });
+      const azubiUsers = await response.json();
       setAzubis(azubiUsers || []);
     } catch (error) {
       console.error('Fehler beim Laden der Azubis:', error);
@@ -87,17 +96,34 @@ const App = () => {
 
   const loadBerichte = async (currentUser) => {
     try {
-      let query = 'berichte?select=*&order=datum_von.desc';
+      let data = [];
       
       if (currentUser.role === 'azubi') {
-        // Azubi sieht nur seine eigenen Berichte
-        query = `berichte?user_id=eq.${currentUser.id}&select=*&order=datum_von.desc`;
+        // Azubi sieht nur seine eigenen Berichte via Funktion
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_berichte`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ p_user_id: currentUser.id })
+        });
+        data = await response.json();
       } else if (currentUser.role === 'ausbilder' && selectedAzubi) {
-        // Ausbilder sieht nur Berichte vom ausgewählten Azubi
-        query = `berichte?user_id=eq.${selectedAzubi.id}&select=*&order=datum_von.desc`;
+        // Ausbilder sieht Berichte vom ausgewählten Azubi
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_berichte`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ p_user_id: selectedAzubi.id })
+        });
+        data = await response.json();
       }
       
-      const data = await supabaseRequest(query);
       const berichteData = data || [];
       setBerichte(berichteData);
       setFilteredBerichte(berichteData);
@@ -190,31 +216,35 @@ const App = () => {
     }
 
     try {
-      const neuerBericht = {
-        user_id: user.id,
-        azubi_name: user.name,
-        datum_von: datumVon,
-        datum_bis: datumBis,
-        taetigkeit: taetigkeit,
-        details: details,
-        stunden: parseFloat(stunden) || 0,
-        status: 'pending',
-        kommentar: null,
-        ueberarbeitet: false
-      };
-
-      await supabaseRequest('berichte', {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/insert_bericht`, {
         method: 'POST',
-        body: JSON.stringify(neuerBericht),
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          p_user_id: user.id,
+          p_azubi_name: user.name,
+          p_datum_von: datumVon,
+          p_datum_bis: datumBis,
+          p_taetigkeit: taetigkeit,
+          p_details: details,
+          p_stunden: parseFloat(stunden) || 0
+        })
       });
 
-      document.getElementById('taetigkeit-text').value = '';
-      document.getElementById('details-text').value = '';
-      document.getElementById('stunden-input').value = '';
-      setDatumVon(new Date().toISOString().split('T')[0]);
-      setDatumBis(new Date().toISOString().split('T')[0]);
-      loadBerichte(user);
-      alert('Bericht erfolgreich eingereicht!');
+      if (response.ok) {
+        document.getElementById('taetigkeit-text').value = '';
+        document.getElementById('details-text').value = '';
+        document.getElementById('stunden-input').value = '8';
+        setDatumVon(new Date().toISOString().split('T')[0]);
+        setDatumBis(new Date().toISOString().split('T')[0]);
+        loadBerichte(user);
+        alert('Bericht erfolgreich eingereicht!');
+      } else {
+        throw new Error('Fehler beim Einreichen');
+      }
     } catch (error) {
       console.error('Fehler beim Einreichen:', error);
       alert('Fehler beim Einreichen des Berichts: ' + error.message);
@@ -224,16 +254,24 @@ const App = () => {
   // BERICHT FREIGEBEN
   const handleApprove = async (berichtId) => {
     try {
-      await supabaseRequest(`berichte?id=eq.${berichtId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ 
-          status: 'approved',
-          kommentar: null,
-          ueberarbeitet: false
-        }),
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/update_bericht_status`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          p_bericht_id: berichtId,
+          p_status: 'approved',
+          p_kommentar: null
+        })
       });
-      loadBerichte(user);
-      alert('Bericht wurde freigegeben!');
+      
+      if (response.ok) {
+        loadBerichte(user);
+        alert('Bericht wurde freigegeben!');
+      }
     } catch (error) {
       console.error('Fehler beim Freigeben:', error);
       alert('Fehler beim Freigeben des Berichts');
@@ -250,16 +288,24 @@ const App = () => {
     }
 
     try {
-      await supabaseRequest(`berichte?id=eq.${berichtId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ 
-          status: 'rejected',
-          kommentar: kommentarText,
-          ueberarbeitet: false
-        }),
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/update_bericht_status`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          p_bericht_id: berichtId,
+          p_status: 'rejected',
+          p_kommentar: kommentarText
+        })
       });
-      loadBerichte(user);
-      alert('Bericht wurde abgelehnt');
+      
+      if (response.ok) {
+        loadBerichte(user);
+        alert('Bericht wurde abgelehnt');
+      }
     } catch (error) {
       console.error('Fehler beim Ablehnen:', error);
       alert('Fehler beim Ablehnen des Berichts');
@@ -269,15 +315,24 @@ const App = () => {
   // BERICHT ÜBERARBEITEN
   const handleResubmit = async (berichtId) => {
     try {
-      await supabaseRequest(`berichte?id=eq.${berichtId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ 
-          status: 'pending',
-          ueberarbeitet: true
-        }),
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/update_bericht_status`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          p_bericht_id: berichtId,
+          p_status: 'pending',
+          p_kommentar: null
+        })
       });
-      loadBerichte(user);
-      alert('Bericht wurde zur erneuten Prüfung eingereicht!');
+      
+      if (response.ok) {
+        loadBerichte(user);
+        alert('Bericht wurde zur erneuten Prüfung eingereicht!');
+      }
     } catch (error) {
       console.error('Fehler beim erneuten Einreichen:', error);
     }
@@ -760,10 +815,18 @@ const App = () => {
                       setBerichte([]);
                       setFilteredBerichte([]);
                       
-                      // Lade Berichte direkt mit der Azubi ID
+                      // Lade Berichte über sichere Funktion
                       try {
-                        const query = `berichte?user_id=eq.${azubi.id}&select=*&order=datum_von.desc`;
-                        const data = await supabaseRequest(query);
+                        const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_berichte`, {
+                          method: 'POST',
+                          headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': `Bearer ${SUPABASE_KEY}`,
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify({ p_user_id: azubi.id })
+                        });
+                        const data = await response.json();
                         const berichteData = data || [];
                         setBerichte(berichteData);
                         setFilteredBerichte(berichteData);
