@@ -17,6 +17,7 @@ const App = () => {
   const [datumVon, setDatumVon] = useState(new Date().toISOString().split('T')[0]);
   const [datumBis, setDatumBis] = useState(new Date().toISOString().split('T')[0]);
   const [zeitraumFilter, setZeitraumFilter] = useState('alle');
+  const [sortierung, setSortierung] = useState('datum-neu'); // neu: Sortierung
 
   const supabaseRequest = async (endpoint, options = {}) => {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, {
@@ -85,16 +86,38 @@ const App = () => {
       const data = await supabaseRequest(query);
       setBerichte(data || []);
       setFilteredBerichte(data || []);
+      sortiereBerichte(data || [], sortierung);
     } catch (error) {
       console.error('Fehler beim Laden der Berichte:', error);
     }
+  };
+
+  // SORTIERUNG
+  const sortiereBerichte = (berichteList, sortType) => {
+    const sorted = [...berichteList].sort((a, b) => {
+      if (sortType === 'datum-neu') {
+        return new Date(b.datum_von) - new Date(a.datum_von);
+      } else if (sortType === 'datum-alt') {
+        return new Date(a.datum_von) - new Date(b.datum_von);
+      } else if (sortType === 'status') {
+        const statusOrder = { 'pending': 0, 'approved': 1, 'rejected': 2 };
+        return (statusOrder[a.status] || 0) - (statusOrder[b.status] || 0);
+      }
+      return 0;
+    });
+    setFilteredBerichte(sorted);
+  };
+
+  const handleSortChange = (newSort) => {
+    setSortierung(newSort);
+    sortiereBerichte(filteredBerichte, newSort);
   };
 
   const filterBerichteByZeitraum = (zeitraum) => {
     setZeitraumFilter(zeitraum);
     
     if (zeitraum === 'alle') {
-      setFilteredBerichte(berichte);
+      sortiereBerichte(berichte, sortierung);
       return;
     }
 
@@ -119,13 +142,13 @@ const App = () => {
           const berichtDatum = new Date(b.datum_von);
           return berichtDatum >= startDatum && berichtDatum <= endDatum;
         });
-        setFilteredBerichte(filtered);
+        sortiereBerichte(filtered, sortierung);
         return;
       case 'dieses-jahr':
         startDatum = new Date(heute.getFullYear(), 0, 1);
         break;
       default:
-        setFilteredBerichte(berichte);
+        sortiereBerichte(berichte, sortierung);
         return;
     }
 
@@ -134,7 +157,7 @@ const App = () => {
       return berichtDatum >= startDatum;
     });
     
-    setFilteredBerichte(filtered);
+    sortiereBerichte(filtered, sortierung);
   };
 
   const handleSubmit = async (e) => {
@@ -157,7 +180,10 @@ const App = () => {
         datum_bis: datumBis,
         taetigkeit: taetigkeit,
         details: details,
-        stunden: parseFloat(stunden) || 0
+        stunden: parseFloat(stunden) || 0,
+        status: 'pending',
+        kommentar: null,
+        ueberarbeitet: false
       };
 
       await supabaseRequest('berichte', {
@@ -178,6 +204,68 @@ const App = () => {
     }
   };
 
+  // BERICHT FREIGEBEN
+  const handleApprove = async (berichtId) => {
+    try {
+      await supabaseRequest(`berichte?id=eq.${berichtId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ 
+          status: 'approved',
+          kommentar: null,
+          ueberarbeitet: false
+        }),
+      });
+      loadBerichte(user);
+      alert('Bericht wurde freigegeben!');
+    } catch (error) {
+      console.error('Fehler beim Freigeben:', error);
+      alert('Fehler beim Freigeben des Berichts');
+    }
+  };
+
+  // BERICHT ABLEHNEN
+  const handleReject = async (berichtId) => {
+    const kommentarText = prompt('Bitte gib einen Kommentar für die Ablehnung ein:');
+    
+    if (!kommentarText || !kommentarText.trim()) {
+      alert('Ablehnung abgebrochen - Kommentar ist erforderlich');
+      return;
+    }
+
+    try {
+      await supabaseRequest(`berichte?id=eq.${berichtId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ 
+          status: 'rejected',
+          kommentar: kommentarText,
+          ueberarbeitet: false
+        }),
+      });
+      loadBerichte(user);
+      alert('Bericht wurde abgelehnt');
+    } catch (error) {
+      console.error('Fehler beim Ablehnen:', error);
+      alert('Fehler beim Ablehnen des Berichts');
+    }
+  };
+
+  // BERICHT ÜBERARBEITEN
+  const handleResubmit = async (berichtId) => {
+    try {
+      await supabaseRequest(`berichte?id=eq.${berichtId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ 
+          status: 'pending',
+          ueberarbeitet: true
+        }),
+      });
+      loadBerichte(user);
+      alert('Bericht wurde zur erneuten Prüfung eingereicht!');
+    } catch (error) {
+      console.error('Fehler beim erneuten Einreichen:', error);
+    }
+  };
+
   // ECHTES PDF MIT jsPDF ERSTELLEN
   const generatePdf = async (bericht) => {
     try {
@@ -188,7 +276,6 @@ const App = () => {
         
         for (let word of words) {
           if (word.length > maxLength) {
-            // Langes Wort in Stücke teilen
             for (let i = 0; i < word.length; i += maxLength) {
               result.push(word.substring(i, i + maxLength));
             }
@@ -210,12 +297,12 @@ const App = () => {
         const doc = new jsPDF();
         
         const margin = 15;
-        const pageWidth = 210; // A4 mm
+        const pageWidth = 210;
         const contentWidth = pageWidth - (margin * 2);
         let y = margin;
         
         // ===== BLAUER HEADER =====
-        doc.setFillColor(30, 64, 175); // Blau
+        doc.setFillColor(30, 64, 175);
         doc.rect(0, 0, pageWidth, 30, 'F');
         
         doc.setTextColor(255, 255, 255);
@@ -226,10 +313,9 @@ const App = () => {
         y = 40;
         
         // ===== INFO BOX =====
-        doc.setFillColor(243, 244, 246); // Hellgrau
+        doc.setFillColor(243, 244, 246);
         doc.rect(margin, y, contentWidth, 35, 'F');
         
-        // Azubi Info
         doc.setTextColor(55, 65, 81);
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
@@ -240,7 +326,6 @@ const App = () => {
         doc.setFontSize(9);
         doc.text(bericht.azubi_name, margin + 5, y + 15);
         
-        // Zeitraum
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(55, 65, 81);
         doc.setFontSize(10);
@@ -252,7 +337,6 @@ const App = () => {
         const zeitraumText = `${new Date(bericht.datum_von).toLocaleDateString('de-DE')} - ${new Date(bericht.datum_bis).toLocaleDateString('de-DE')}`;
         doc.text(zeitraumText, margin + 5, y + 30);
         
-        // Stunden (rechts)
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(55, 65, 81);
         doc.setFontSize(10);
@@ -275,12 +359,10 @@ const App = () => {
         
         y += 15;
         
-        // Tätigkeit Text mit ECHTER Umbrechung
         doc.setTextColor(31, 41, 55);
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         
-        // Breche lange Wörter auf
         const taetigkeitBroken = breakLongWords(bericht.taetigkeit, 80);
         const taetigkeitLines = doc.splitTextToSize(taetigkeitBroken, contentWidth - 10);
         doc.text(taetigkeitLines, margin + 5, y);
@@ -297,12 +379,10 @@ const App = () => {
         
         y += 15;
         
-        // Details Text mit ECHTER Umbrechung
         doc.setTextColor(31, 41, 55);
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         
-        // Breche lange Wörter auf
         const detailsBroken = breakLongWords(bericht.details, 80);
         const detailsLines = doc.splitTextToSize(detailsBroken, contentWidth - 10);
         doc.text(detailsLines, margin + 5, y);
@@ -313,7 +393,6 @@ const App = () => {
           y = 240;
         }
         
-        // Azubi Unterschrift
         doc.setDrawColor(209, 213, 219);
         doc.setLineWidth(0.5);
         doc.line(margin, y, margin + 60, y);
@@ -322,7 +401,6 @@ const App = () => {
         doc.setFontSize(8);
         doc.text('Unterschrift Auszubildende/r', margin, y + 5);
         
-        // Ausbilder Unterschrift
         doc.line(pageWidth - margin - 60, y, pageWidth - margin, y);
         doc.text('Unterschrift Ausbilder/in', pageWidth - margin - 60, y + 5);
         
@@ -331,7 +409,6 @@ const App = () => {
         doc.setFontSize(8);
         doc.text(`Erstellt am ${new Date().toLocaleDateString('de-DE')}`, margin, 285);
         
-        // PDF Speichern
         doc.save(`Ausbildungsnachweis_${bericht.azubi_name}_${bericht.datum_von}.pdf`);
         
         alert('PDF wird heruntergeladen...');
@@ -343,6 +420,30 @@ const App = () => {
     } catch (error) {
       console.error('Fehler beim Generieren:', error);
       alert('Fehler beim Erstellen des PDFs');
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch(status) {
+      case 'approved': return 'bg-green-100 text-green-800';
+      case 'rejected': return 'bg-red-100 text-red-800';
+      default: return 'bg-yellow-100 text-yellow-800';
+    }
+  };
+
+  const getStatusIcon = (status) => {
+    switch(status) {
+      case 'approved': return <CheckCircle className="w-4 h-4" />;
+      case 'rejected': return <XCircle className="w-4 h-4" />;
+      default: return <Clock className="w-4 h-4" />;
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch(status) {
+      case 'approved': return 'Freigegeben';
+      case 'rejected': return 'Abgelehnt';
+      default: return 'Ausstehend';
     }
   };
 
@@ -524,11 +625,17 @@ const App = () => {
                 ) : (
                   berichte.map((bericht) => (
                     <div key={bericht.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                      <div className="mb-2">
-                        <p className="text-sm font-medium text-gray-900">
-                          {new Date(bericht.datum_von).toLocaleDateString('de-DE')} - {new Date(bericht.datum_bis).toLocaleDateString('de-DE')}
-                        </p>
-                        <p className="text-xs text-gray-500">{bericht.stunden} Stunden</p>
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1 min-w-0 mr-2">
+                          <p className="text-sm font-medium text-gray-900">
+                            {new Date(bericht.datum_von).toLocaleDateString('de-DE')} - {new Date(bericht.datum_bis).toLocaleDateString('de-DE')}
+                          </p>
+                          <p className="text-xs text-gray-500">{bericht.stunden} Stunden</p>
+                        </div>
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(bericht.status)}`}>
+                          {getStatusIcon(bericht.status)}
+                          <span className="ml-1">{getStatusText(bericht.status)}</span>
+                        </span>
                       </div>
                       
                       <div className="w-full max-w-full overflow-hidden mb-2">
@@ -558,16 +665,33 @@ const App = () => {
                           {bericht.details}
                         </p>
                       </div>
+
+                      {/* KOMMENTAR BEI ABLEHNUNG */}
+                      {bericht.status === 'rejected' && bericht.kommentar && (
+                        <div className="mt-3 p-3 bg-red-50 rounded border border-red-200">
+                          <p className="text-xs font-medium text-red-800 mb-1">Kommentar vom Ausbilder:</p>
+                          <p className="text-xs text-red-700">{bericht.kommentar}</p>
+                          <button
+                            onClick={() => handleResubmit(bericht.id)}
+                            className="mt-2 w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition-colors text-sm font-medium"
+                          >
+                            Überarbeiten und erneut einreichen
+                          </button>
+                        </div>
+                      )}
                       
-                      <div className="mt-3">
-                        <button
-                          onClick={() => generatePdf(bericht)}
-                          className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition-colors text-sm font-medium flex items-center justify-center"
-                        >
-                          <Download className="w-4 h-4 mr-2" />
-                          PDF herunterladen
-                        </button>
-                      </div>
+                      {/* PDF DOWNLOAD NUR BEI FREIGABE */}
+                      {bericht.status === 'approved' && (
+                        <div className="mt-3">
+                          <button
+                            onClick={() => generatePdf(bericht)}
+                            className="w-full bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition-colors text-sm font-medium flex items-center justify-center"
+                          >
+                            <Download className="w-4 h-4 mr-2" />
+                            PDF herunterladen
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
@@ -671,36 +795,81 @@ const App = () => {
         </div>
 
         <div className="max-w-4xl mx-auto px-4 py-8">
+          {/* FILTER & SORTIERUNG */}
           <div className="bg-white rounded-lg shadow-md p-4 mb-6">
             <div className="flex items-center mb-3">
               <Filter className="w-5 h-5 text-blue-600 mr-2 flex-shrink-0" />
-              <h3 className="font-medium text-gray-800">Zeitraum filtern:</h3>
+              <h3 className="font-medium text-gray-800">Filter & Sortierung</h3>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {['alle', 'heute', 'diese-woche', 'dieser-monat', 'letzter-monat', 'dieses-jahr'].map((filter) => (
+            
+            {/* ZEITRAUM FILTER */}
+            <div className="mb-4">
+              <p className="text-sm text-gray-700 mb-2">Zeitraum:</p>
+              <div className="flex flex-wrap gap-2">
+                {['alle', 'heute', 'diese-woche', 'dieser-monat', 'letzter-monat', 'dieses-jahr'].map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => filterBerichteByZeitraum(filter)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      zeitraumFilter === filter 
+                        ? 'bg-blue-600 text-white' 
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {filter === 'alle' && 'Alle'}
+                    {filter === 'heute' && 'Heute'}
+                    {filter === 'diese-woche' && 'Diese Woche'}
+                    {filter === 'dieser-monat' && 'Dieser Monat'}
+                    {filter === 'letzter-monat' && 'Letzter Monat'}
+                    {filter === 'dieses-jahr' && 'Dieses Jahr'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* SORTIERUNG */}
+            <div>
+              <p className="text-sm text-gray-700 mb-2">Sortierung:</p>
+              <div className="flex flex-wrap gap-2">
                 <button
-                  key={filter}
-                  onClick={() => filterBerichteByZeitraum(filter)}
+                  onClick={() => handleSortChange('datum-neu')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    zeitraumFilter === filter 
+                    sortierung === 'datum-neu' 
                       ? 'bg-blue-600 text-white' 
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  {filter === 'alle' && 'Alle'}
-                  {filter === 'heute' && 'Heute'}
-                  {filter === 'diese-woche' && 'Diese Woche'}
-                  {filter === 'dieser-monat' && 'Dieser Monat'}
-                  {filter === 'letzter-monat' && 'Letzter Monat'}
-                  {filter === 'dieses-jahr' && 'Dieses Jahr'}
+                  Neuste zuerst
                 </button>
-              ))}
+                <button
+                  onClick={() => handleSortChange('datum-alt')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    sortierung === 'datum-alt' 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Älteste zuerst
+                </button>
+                <button
+                  onClick={() => handleSortChange('status')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    sortierung === 'status' 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Nach Status
+                </button>
+              </div>
             </div>
+
             <p className="text-sm text-gray-600 mt-3">
               Zeige {filteredBerichte.length} von {berichte.length} Berichten
             </p>
           </div>
 
+          {/* BERICHTE LISTE */}
           <div className="space-y-4">
             {filteredBerichte.length === 0 ? (
               <div className="bg-white rounded-lg shadow-md p-8 text-center">
@@ -713,44 +882,88 @@ const App = () => {
             ) : (
               filteredBerichte.map((bericht) => (
                 <div key={bericht.id} className="bg-white rounded-lg shadow-md p-6">
-                  <div className="mb-4">
-                    <h3 className="text-lg font-bold text-gray-900">
-                      {new Date(bericht.datum_von).toLocaleDateString('de-DE')} - {new Date(bericht.datum_bis).toLocaleDateString('de-DE')}
-                    </h3>
-                    <p className="text-sm text-gray-600">von {bericht.azubi_name} • {bericht.stunden} Stunden</p>
+                  {/* ÜBERARBEITET HINWEIS */}
+                  {bericht.ueberarbeitet && bericht.status === 'pending' && (
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start">
+                      <AlertCircle className="w-5 h-5 text-blue-600 mr-2 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-blue-800">Überarbeiteter Bericht</p>
+                        <p className="text-xs text-blue-600 mt-1">Dieser Bericht wurde überarbeitet</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* HEADER MIT STATUS */}
+                  <div className="flex justify-between items-start mb-4 gap-4">
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">
+                        {new Date(bericht.datum_von).toLocaleDateString('de-DE')} - {new Date(bericht.datum_bis).toLocaleDateString('de-DE')}
+                      </h3>
+                      <p className="text-sm text-gray-600">von {bericht.azubi_name} • {bericht.stunden} Stunden</p>
+                    </div>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium flex-shrink-0 ${getStatusColor(bericht.status)}`}>
+                      {getStatusIcon(bericht.status)}
+                      <span className="ml-1">{getStatusText(bericht.status)}</span>
+                    </span>
                   </div>
 
+                  {/* TÄTIGKEIT */}
                   <div className="mb-4 p-4 bg-gray-50 rounded-lg w-full max-w-full overflow-hidden">
                     <p className="text-sm font-medium text-gray-700 mb-1">Tätigkeit:</p>
-                    <div className="w-full max-w-full overflow-hidden">
-                      <p 
-                        className="text-sm text-gray-900 break-all whitespace-pre-wrap"
-                        style={{
-                          wordBreak: 'break-all',
-                          overflowWrap: 'anywhere',
-                          maxWidth: '100%'
-                        }}
-                      >
-                        {bericht.taetigkeit}
-                      </p>
-                    </div>
+                    <p 
+                      className="text-sm text-gray-900 break-all whitespace-pre-wrap"
+                      style={{
+                        wordBreak: 'break-all',
+                        overflowWrap: 'anywhere',
+                        maxWidth: '100%'
+                      }}
+                    >
+                      {bericht.taetigkeit}
+                    </p>
                   </div>
 
+                  {/* DETAILS */}
                   <div className="mb-4 p-4 bg-gray-50 rounded-lg w-full max-w-full overflow-hidden">
                     <p className="text-sm font-medium text-gray-700 mb-1">Details:</p>
-                    <div className="w-full max-w-full overflow-hidden">
-                      <p 
-                        className="text-sm text-gray-600 break-all whitespace-pre-wrap"
-                        style={{
-                          wordBreak: 'break-all',
-                          overflowWrap: 'anywhere',
-                          maxWidth: '100%'
-                        }}
-                      >
-                        {bericht.details}
-                      </p>
-                    </div>
+                    <p 
+                      className="text-sm text-gray-600 break-all whitespace-pre-wrap"
+                      style={{
+                        wordBreak: 'break-all',
+                        overflowWrap: 'anywhere',
+                        maxWidth: '100%'
+                      }}
+                    >
+                      {bericht.details}
+                    </p>
                   </div>
+
+                  {/* KOMMENTAR ANZEIGEN */}
+                  {bericht.status === 'rejected' && bericht.kommentar && (
+                    <div className="mb-4 p-3 bg-red-50 rounded border border-red-200">
+                      <p className="text-sm font-medium text-red-800 mb-1">Dein Kommentar:</p>
+                      <p className="text-sm text-red-700">{bericht.kommentar}</p>
+                    </div>
+                  )}
+
+                  {/* FREIGEBEN / ABLEHNEN BUTTONS */}
+                  {bericht.status === 'pending' && (
+                    <div className="flex gap-2 pt-4 border-t">
+                      <button
+                        onClick={() => handleApprove(bericht.id)}
+                        className="flex-1 bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition-colors font-medium flex items-center justify-center"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Freigeben
+                      </button>
+                      <button
+                        onClick={() => handleReject(bericht.id)}
+                        className="flex-1 bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700 transition-colors font-medium flex items-center justify-center"
+                      >
+                        <XCircle className="w-4 h-4 mr-2" />
+                        Ablehnen
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))
             )}
