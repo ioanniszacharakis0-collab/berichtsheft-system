@@ -946,7 +946,7 @@ const App = () => {
                   )}
 
                   {/* FREIGEBEN / ABLEHNEN BUTTONS */}
-                  {bericht.status === 'pending' && (
+                  {(!bericht.status || bericht.status === 'pending') && (
                     <div className="flex gap-2 pt-4 border-t">
                       <button
                         onClick={() => handleApprove(bericht.id)}
@@ -962,6 +962,25 @@ const App = () => {
                         <XCircle className="w-4 h-4 mr-2" />
                         Ablehnen
                       </button>
+                    </div>
+                  )}
+
+                  {/* INFO FÜR BEREITS BEARBEITETE BERICHTE */}
+                  {bericht.status === 'approved' && (
+                    <div className="pt-4 border-t">
+                      <div className="p-3 bg-green-50 rounded-lg flex items-center">
+                        <CheckCircle className="w-5 h-5 text-green-600 mr-2 flex-shrink-0" />
+                        <p className="text-sm text-green-800">Dieser Bericht wurde bereits freigegeben</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {bericht.status === 'rejected' && (
+                    <div className="pt-4 border-t">
+                      <div className="p-3 bg-red-50 rounded-lg flex items-center">
+                        <XCircle className="w-5 h-5 text-red-600 mr-2 flex-shrink-0" />
+                        <p className="text-sm text-red-800">Dieser Bericht wurde abgelehnt und wartet auf Überarbeitung</p>
+                      </div>
                     </div>
                   )}
                 </div>
