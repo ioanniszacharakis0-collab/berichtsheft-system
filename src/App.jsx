@@ -163,21 +163,19 @@ const App = () => {
     }
 
     try {
-      // User erstellen
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/users`, {
+      // User erstellen mit direktem Passwort-Hashing
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/create_user_with_password`, {
         method: 'POST',
         headers: {
           'apikey': SUPABASE_KEY,
           'Authorization': `Bearer ${SUPABASE_KEY}`,
           'Content-Type': 'application/json',
-          'Prefer': 'return=representation'
         },
         body: JSON.stringify({
-          id: crypto.randomUUID(),
-          username: regUsername.toLowerCase().trim(),
-          password: await hashPassword(regPassword),
-          role: regRole,
-          name: regName.trim()
+          p_username: regUsername.toLowerCase().trim(),
+          p_password: regPassword,
+          p_role: regRole,
+          p_name: regName.trim()
         })
       });
 
@@ -205,23 +203,6 @@ const App = () => {
       setRegError('Fehler bei der Registrierung');
       console.error('Registration error:', error);
     }
-  };
-
-  // Passwort hashen (bcrypt-kompatibel)
-  const hashPassword = async (password) => {
-    // Rufe Supabase Funktion auf um Passwort zu hashen
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/hash_password`, {
-      method: 'POST',
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ p_password: password })
-    });
-    
-    const data = await response.json();
-    return data;
   };
 
   const loadAzubis = async () => {
