@@ -20,6 +20,19 @@ const App = () => {
   const [sortierung, setSortierung] = useState('datum-neu'); // neu: Sortierung
   const [inactivityTimer, setInactivityTimer] = useState(null);
 
+  // Registrierungs-States
+  const [showRegistration, setShowRegistration] = useState(false);
+  const [regUsername, setRegUsername] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regPasswordConfirm, setRegPasswordConfirm] = useState('');
+  const [regName, setRegName] = useState('');
+  const [regRole, setRegRole] = useState('azubi');
+  const [regCode, setRegCode] = useState('');
+  const [regError, setRegError] = useState('');
+
+  // REGISTRIERUNGS-CODE (kannst du ändern!)
+  const REGISTRATION_CODE = 'TFG2026';
+
   // Auto-Logout nach 30 Minuten Inaktivität
   const AUTO_LOGOUT_TIME = 30 * 60 * 1000; // 30 Minuten in Millisekunden
 
@@ -122,6 +135,93 @@ const App = () => {
       setLoginError('Fehler beim Anmelden');
       console.error('Login error:', error);
     }
+  };
+
+  const handleRegistration = async (e) => {
+    e.preventDefault();
+    setRegError('');
+
+    // Validierung
+    if (!regUsername.trim() || !regPassword.trim() || !regName.trim()) {
+      setRegError('Bitte fülle alle Felder aus');
+      return;
+    }
+
+    if (regPassword !== regPasswordConfirm) {
+      setRegError('Passwörter stimmen nicht überein');
+      return;
+    }
+
+    if (regPassword.length < 6) {
+      setRegError('Passwort muss mindestens 6 Zeichen lang sein');
+      return;
+    }
+
+    if (regCode !== REGISTRATION_CODE) {
+      setRegError('Ungültiger Registrierungs-Code');
+      return;
+    }
+
+    try {
+      // User erstellen
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/users`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify({
+          id: crypto.randomUUID(),
+          username: regUsername.toLowerCase().trim(),
+          password: await hashPassword(regPassword),
+          role: regRole,
+          name: regName.trim()
+        })
+      });
+
+      if (response.ok) {
+        alert('Registrierung erfolgreich! Du kannst dich jetzt anmelden.');
+        setShowRegistration(false);
+        setUsername(regUsername.toLowerCase().trim());
+        setPassword(regPassword);
+        // Reset Registrierungs-Felder
+        setRegUsername('');
+        setRegPassword('');
+        setRegPasswordConfirm('');
+        setRegName('');
+        setRegCode('');
+        setRegRole('azubi');
+      } else {
+        const errorText = await response.text();
+        if (errorText.includes('duplicate') || errorText.includes('unique')) {
+          setRegError('Dieser Benutzername existiert bereits');
+        } else {
+          setRegError('Fehler bei der Registrierung');
+        }
+      }
+    } catch (error) {
+      setRegError('Fehler bei der Registrierung');
+      console.error('Registration error:', error);
+    }
+  };
+
+  // Passwort hashen (bcrypt-kompatibel)
+  const hashPassword = async (password) => {
+    // Rufe Supabase Funktion auf um Passwort zu hashen
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/hash_password`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ p_password: password })
+    });
+    
+    const data = await response.json();
+    return data;
   };
 
   const loadAzubis = async () => {
@@ -791,46 +891,176 @@ const App = () => {
             <h1 className="text-3xl font-bold text-gray-800">Berichtsheft</h1>
           </div>
           
-          {loginError && (
-            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
-              {loginError}
-            </div>
+          {!showRegistration ? (
+            // LOGIN FORM
+            <>
+              {loginError && (
+                <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
+                  {loginError}
+                </div>
+              )}
+              
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Benutzername
+                  </label>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Passwort
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+                
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Anmelden
+                </button>
+              </form>
+              
+              <div className="mt-6 text-center">
+                <button
+                  onClick={() => setShowRegistration(true)}
+                  className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                >
+                  Noch kein Account? Jetzt registrieren
+                </button>
+              </div>
+            </>
+          ) : (
+            // REGISTRATION FORM
+            <>
+              {regError && (
+                <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
+                  {regError}
+                </div>
+              )}
+              
+              <form onSubmit={handleRegistration} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Benutzername
+                  </label>
+                  <input
+                    type="text"
+                    value={regUsername}
+                    onChange={(e) => setRegUsername(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="z.B. max.mustermann"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Name
+                  </label>
+                  <input
+                    type="text"
+                    value={regName}
+                    onChange={(e) => setRegName(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="z.B. Max Mustermann"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Rolle
+                  </label>
+                  <select
+                    value={regRole}
+                    onChange={(e) => setRegRole(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="azubi">Azubi</option>
+                    <option value="ausbilder">Ausbilder</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Passwort
+                  </label>
+                  <input
+                    type="password"
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Mindestens 6 Zeichen"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Passwort wiederholen
+                  </label>
+                  <input
+                    type="password"
+                    value={regPasswordConfirm}
+                    onChange={(e) => setRegPasswordConfirm(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Registrierungs-Code
+                  </label>
+                  <input
+                    type="text"
+                    value={regCode}
+                    onChange={(e) => setRegCode(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Code von Administrator"
+                    required
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Den Code erhältst du vom Administrator
+                  </p>
+                </div>
+                
+                <button
+                  type="submit"
+                  className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition-colors font-medium"
+                >
+                  Registrieren
+                </button>
+              </form>
+              
+              <div className="mt-6 text-center">
+                <button
+                  onClick={() => {
+                    setShowRegistration(false);
+                    setRegError('');
+                  }}
+                  className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                >
+                  ← Zurück zum Login
+                </button>
+              </div>
+            </>
           )}
-          
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Benutzername
-              </label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Passwort
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-            
-            <button
-              type="submit"
-              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-            >
-              Anmelden
-            </button>
-          </form>
         </div>
       </div>
     );
